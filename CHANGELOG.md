@@ -8,6 +8,20 @@ The project is independently maintained and is derived from the original Tado X 
 
 **[Readme](README.md)** · [Report an issue](https://github.com/rleatherb/ha-tado-x-enhanced/issues) · [Releases](https://github.com/rleatherb/ha-tado-x-enhanced/releases)
 
+## [Unreleased] — DEV-003 development candidate
+
+### Changed
+
+- Serialise refresh-token rotation within each Tado home API client, including expiry and HTTP 401 recovery.
+- Treat temporary token-server/network failures as recoverable rather than immediately requiring reauthentication.
+- Avoid unnecessary refresh when a stored access token remains valid at setup.
+- Use Home Assistant's shared SSL context for device authorisation and stop logging the device user code.
+- Add debug-only home ID, refresh reason and token lifetime to successful refresh logs, plus home ID to token-persistence logs; never log credentials.
+
+### Validation
+
+- Standalone mocked tests and static validation passed. Maintainer confirmed live refresh, token persistence and the new home-specific debug logging for both homes on 2026-11-07. Live authentication failure-recovery scenarios and full Home Assistant regression testing remain outstanding.
+
 ## [1.1.1](https://github.com/rleatherb/ha-tado-x-enhanced/releases/tag/v1.1.1) - 2026-11-06
 
 ### Fixed

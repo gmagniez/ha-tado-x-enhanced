@@ -296,7 +296,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 CONF_TOKEN_EXPIRY: api.token_expiry.isoformat() if api.token_expiry else None,
             },
         )
-        _LOGGER.debug("Tokens persisted to config entry")
+        _LOGGER.debug("Tokens persisted: home_id=%s", entry.data[CONF_HOME_ID])
 
     api = TadoXApi(
         session=session,
@@ -312,13 +312,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         on_token_refresh=save_tokens,
     )
     api_container["api"] = api
+    api.home_id = entry.data[CONF_HOME_ID]
 
     home_id = entry.data[CONF_HOME_ID]
     home_name = entry.data.get(CONF_HOME_NAME, f"Tado Home {home_id}")
 
-    # Test the connection and refresh token if needed
+    # Refresh only if necessary; the first coordinator update validates the connection.
     try:
-        await api.refresh_access_token()
+        await api._ensure_valid_token()
 
         # Update stored tokens and API call stats
         hass.config_entries.async_update_entry(
@@ -339,6 +340,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except TadoXAuthError as err:
         _LOGGER.error("Authentication failed: %s", err)
         raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
+    except TadoXApiError as err:
+        raise ConfigEntryNotReady(f"Cannot reach Tado authentication server: {err}") from err
 
     # Create callback to save API stats periodically
     def save_api_stats() -> None:

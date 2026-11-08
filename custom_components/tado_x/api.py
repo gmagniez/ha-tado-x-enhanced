@@ -9,6 +9,8 @@ from typing import Any
 import aiohttp
 import ssl
 
+from homeassistant.util.ssl import get_default_context
+
 from .const import (
     TADO_AUTH_URL,
     TADO_CLIENT_ID,
@@ -64,6 +66,7 @@ class TadoXApi:
         self._home_id: int | None = None
         self._has_auto_assist = has_auto_assist
         self._on_token_refresh = on_token_refresh
+        self._token_lock = asyncio.Lock()
         self._get_room_control_defaults = None
 
         # The server's daily quota counter, not a fixed UTC clock, determines
@@ -223,8 +226,8 @@ class TadoXApi:
         _LOGGER.warning("Starting device authorization flow")
         timeout = aiohttp.ClientTimeout(total=30, connect=10, sock_read=20)
 
-        # Create SSL context that's more permissive for debugging
-        ssl_context = ssl.create_default_context()
+        # Reuse Home Assistant's SSL context; do not load CA certificates on the event loop.
+        ssl_context = get_default_context()
 
         # Create a dedicated session for auth to ensure timeout is respected
         connector = aiohttp.TCPConnector(force_close=True, ssl=ssl_context)
@@ -248,7 +251,7 @@ class TadoXApi:
                         _LOGGER.error("Failed to start device auth: %s - %s", response.status, text)
                         raise TadoXAuthError(f"Failed to start device auth: {response.status}")
                     result = await response.json()
-                    _LOGGER.warning("Device auth successful, got user_code: %s", result.get("user_code"))
+                    _LOGGER.debug("Device authorization request succeeded")
                     return result
             except asyncio.TimeoutError as err:
                 _LOGGER.error("Timeout during device auth request (30s)")
@@ -305,7 +308,12 @@ class TadoXApi:
         return False
 
     async def refresh_access_token(self) -> bool:
-        """Refresh the access token using the refresh token."""
+        """Explicitly refresh credentials, serialised with automatic refreshes."""
+        async with self._token_lock:
+            return await self._refresh_access_token_locked(reason="explicit")
+
+    async def _refresh_access_token_locked(self, reason: str) -> bool:
+        """Rotate tokens. Caller must hold _token_lock."""
         if not self._refresh_token:
             raise TadoXAuthError("No refresh token available")
 
@@ -320,34 +328,57 @@ class TadoXApi:
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             ) as response:
                 if response.status != 200:
-                    text = await response.text()
-                    _LOGGER.error("Failed to refresh token: %s - %s", response.status, text)
-                    raise TadoXAuthError(f"Failed to refresh token: {response.status}")
+                    # Avoid logging OAuth response bodies, which may contain sensitive data.
+                    if response.status in (408, 429) or response.status >= 500:
+                        raise TadoXApiError(f"Token server temporarily unavailable: HTTP {response.status}")
+                    if response.status in (400, 401):
+                        try:
+                            error_data = await response.json()
+                        except (ValueError, aiohttp.ContentTypeError):
+                            error_data = {}
+                        error_code = error_data.get("error") if isinstance(error_data, dict) else None
+                        if response.status == 401 or error_code in (
+                            "invalid_grant", "invalid_client", "refresh_token_not_found"
+                        ):
+                            raise TadoXAuthError(f"Token refresh rejected: HTTP {response.status}")
+                    raise TadoXApiError(f"Token refresh failed: HTTP {response.status}")
 
                 data = await response.json()
-                self._access_token = data["access_token"]
-                self._refresh_token = data.get("refresh_token", self._refresh_token)
+                access_token = data.get("access_token")
+                if not access_token:
+                    raise TadoXApiError("Token server returned no access token")
+                new_refresh_token = data.get("refresh_token", self._refresh_token)
                 expires_in = data.get("expires_in", 600)
+                # Update together before persisting the rotated credentials.
+                self._access_token = access_token
+                self._refresh_token = new_refresh_token
                 self._token_expiry = datetime.now() + timedelta(seconds=expires_in)
-
-                # Persist tokens immediately after refresh to prevent auth loss on restart
                 if self._on_token_refresh:
                     self._on_token_refresh()
-
-                _LOGGER.debug("Token refreshed successfully, expires in %s seconds", expires_in)
+                _LOGGER.debug("Token refresh successful: home_id=%s, reason=%s, expires_in=%ss", self._home_id, reason, expires_in)
                 return True
-
+        except asyncio.TimeoutError as err:
+            raise TadoXApiError("Timeout during token refresh") from err
         except aiohttp.ClientError as err:
-            raise TadoXAuthError(f"Network error during token refresh: {err}") from err
+            raise TadoXApiError(f"Network error during token refresh: {err}") from err
+
+    def _token_is_stale(self) -> bool:
+        """Refresh missing/unknown expiry or tokens expiring within 60 seconds."""
+        return self._token_expiry is None or datetime.now() >= self._token_expiry - timedelta(seconds=60)
 
     async def _ensure_valid_token(self) -> None:
-        """Ensure we have a valid access token."""
-        if not self._access_token:
-            raise TadoXAuthError("Not authenticated")
+        """Ensure a usable access token, avoiding simultaneous rotations."""
+        if self._access_token and not self._token_is_stale():
+            return
+        async with self._token_lock:
+            if not self._access_token or self._token_is_stale():
+                await self._refresh_access_token_locked(reason="expiry" if self._access_token else "missing_token")
 
-        # Refresh if token expires in less than 60 seconds
-        if self._token_expiry and datetime.now() >= self._token_expiry - timedelta(seconds=60):
-            await self.refresh_access_token()
+    async def _refresh_after_401(self, rejected_token: str | None) -> None:
+        """Refresh only if the token rejected by the server is still current."""
+        async with self._token_lock:
+            if self._access_token == rejected_token:
+                await self._refresh_access_token_locked(reason="http_401")
 
     async def _request(
         self,
@@ -361,8 +392,9 @@ class TadoXApi:
         # Track API call
         self._api_calls_today += 1
 
+        sent_token = self._access_token
         headers = {
-            "Authorization": f"Bearer {self._access_token}",
+            "Authorization": f"Bearer {sent_token}",
             "Content-Type": "application/json",
         }
 
@@ -378,7 +410,7 @@ class TadoXApi:
 
                 if response.status == 401:
                     # Try to refresh token and retry
-                    await self.refresh_access_token()
+                    await self._refresh_after_401(sent_token)
                     headers["Authorization"] = f"Bearer {self._access_token}"
                     async with self._session.request(
                         method,
@@ -386,10 +418,16 @@ class TadoXApi:
                         headers=headers,
                         json=json_data,
                     ) as retry_response:
-                        if retry_response.status != 200:
+                        self._parse_rate_limit_headers(retry_response.headers)
+                        if retry_response.status == 429:
+                            raise TadoXRateLimitError(
+                                "API rate limit exceeded (429). Please wait for quota reset.",
+                                reset_time=self._api_call_reset_time,
+                            )
+                        if retry_response.status not in (200, 204):
                             text = await retry_response.text()
                             raise TadoXApiError(f"API error: {retry_response.status} - {text}")
-                        if retry_response.content_length == 0:
+                        if retry_response.status == 204 or retry_response.content_length == 0:
                             return None
                         return await retry_response.json()
 
@@ -413,6 +451,8 @@ class TadoXApi:
                     return None
                 return await response.json()
 
+        except asyncio.TimeoutError as err:
+            raise TadoXApiError("Timeout talking to the Tado API") from err
         except aiohttp.ClientError as err:
             raise TadoXApiError(f"Network error: {err}") from err
 

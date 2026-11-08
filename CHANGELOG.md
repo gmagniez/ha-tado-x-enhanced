@@ -8,7 +8,7 @@ The project is independently maintained and is derived from the original Tado X 
 
 **[Readme](README.md)** · [Report an issue](https://github.com/rleatherb/ha-tado-x-enhanced/issues) · [Releases](https://github.com/rleatherb/ha-tado-x-enhanced/releases)
 
-## [Unreleased] — DEV-003 development candidate
+## [1.1.2](https://github.com/rleatherb/ha-tado-x-enhanced/releases/tag/v1.1.2) - 2026-11-08
 
 ### Changed
 
@@ -20,7 +20,11 @@ The project is independently maintained and is derived from the original Tado X 
 
 ### Validation
 
-- Standalone mocked tests and static validation passed. Maintainer confirmed live refresh, token persistence and the new home-specific debug logging for both homes on 2026-11-07. Live authentication failure-recovery scenarios and full Home Assistant regression testing remain outstanding.
+- Standalone mocked tests and static validation passed. The maintainer confirmed live token refresh, token persistence and home-specific debug logging for both homes on 2026-11-07. Live authentication failure recovery and a complete Home Assistant regression run have not been verified.
+
+### Contributors
+
+- Incorporates and extends authentication improvements proposed by @cmatte in PRs #5, #6 and #7; consolidated in PR #9.
 
 ## [1.1.1](https://github.com/rleatherb/ha-tado-x-enhanced/releases/tag/v1.1.1) - 2026-11-06
 

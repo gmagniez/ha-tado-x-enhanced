@@ -4,7 +4,7 @@ An independently maintained custom integration for controlling and monitoring **
 
 Tado X Enhanced builds on the original [Tado X integration by exabird](https://github.com/exabird/ha-tado-x) (version v1.8.11), adding multi-home support, Home and Away schedule management, reusable schedule profiles, domestic hot-water controls, richer room diagnostics and API quota forecasting.
 
-> **Project status:** Version: `1.1.1`. See [GitHub Releases](https://github.com/rleatherb/ha-tado-x-enhanced/releases) for the latest published version. Some features depend on your Tado hardware, subscription and API responses. This is a cloud-based integration and is subject to Tado API limits. Code development and documentation assisted by AI.
+> **Project status:** Current release: `1.1.2`. See [GitHub Releases](https://github.com/rleatherb/ha-tado-x-enhanced/releases) for the latest published version. Some features depend on your Tado hardware, subscription and API responses. This is a cloud-based integration and is subject to Tado API limits. Code development and documentation assisted by AI.
 
 **[Changelog](CHANGELOG.md)** · [Report an issue](https://github.com/rleatherb/ha-tado-x-enhanced/issues) · [Releases](https://github.com/rleatherb/ha-tado-x-enhanced/releases)
 
@@ -20,6 +20,7 @@ Tado X Enhanced builds on the original [Tado X integration by exabird](https://g
 - **Open window status:** Open window expiry and remaining time available via `open_window_detected`, `open_window_ends_at`, and `open_window_remaining_minutes `climate attributes.
 - **API monitoring:** Track quota limit, remaining calls, current usage and estimated daily usage. Learn the approximate reset time from server-reported quota observations rather than assuming a fixed clock time.
 - **Additional data:** Heating running time, weather, air comfort, mobile presence and Energy IQ actions where supported and enabled.
+- **Authentication reliability:** Serialised token renewal, improved recovery from temporary authentication-server failures, and per-home debug logging for successful refreshes.
 - **Five languages:** English, German, French, Italian and Spanish.
 
 ## Installation through HACS
@@ -151,7 +152,7 @@ These calculations do not require additional API calls. They are estimates, not 
 - Tado's API is not controlled by this project and may change or impose request limits.
 - Multiple homes are supported, but verify service targeting and quota reporting when configuring more than one home.
 - The minimum supported Home Assistant release has **not yet been established by testing**. Do not infer compatibility solely from the manifest version.
-- The original `1.0.0` release was validated on a separate Home Assistant test installation, including a HACS handover from the original Exabird integration. Version `1.1.0` passed regression testing, including Home Assistant 2026.11 climate compatibility checks. For `1.1.1`, the maintainer confirmed that the Holiday Mode date-update correction works against the live Tado API; a complete regression run on both homes has not been reported. Compatibility with every earlier installation and Home Assistant release has not been established.
+- The original `1.0.0` release was validated on a separate Home Assistant test installation, including a HACS handover from the original Exabird integration. Version `1.1.0` passed regression testing, including Home Assistant 2026.11 climate compatibility checks. For `1.1.1`, the maintainer confirmed that the Holiday Mode date-update correction works against the live Tado API. For `1.1.2`, automatic token refresh and credential persistence were confirmed for both homes; live authentication failure recovery and a complete regression run have not been verified. Compatibility with every earlier installation and Home Assistant release has not been established.
 
 ## Releases and changes
 

@@ -1,6 +1,6 @@
 # Tado X Enhanced — Technical Architecture
 
-**Documented release:** Tado X Enhanced `1.1.1`  
+**Documented release:** Tado X Enhanced `1.1.2`  
 **Implementation source:** `custom_components/tado_x/` in this repository  
 **Integration domain:** `tado_x`  
 **Repository:** https://github.com/rleatherb/ha-tado-x-enhanced  
@@ -264,7 +264,7 @@ Before accepting a code change:
 
 ## 15. Provenance and validation scope
 
-This document describes the implementation packaged with Tado X Enhanced `1.1.1`, including the integration modules, manifest, action definitions and schedule-profile handling. Source inspection and static validation are distinct from live integration tests. For release-specific changes and test scope, consult [CHANGELOG.md](../CHANGELOG.md).
+This document describes the implementation packaged with Tado X Enhanced `1.1.2`, including the integration modules, manifest, action definitions and schedule-profile handling. Source inspection and static validation are distinct from live integration tests. For release-specific changes and test scope, consult [CHANGELOG.md](../CHANGELOG.md).
 
 Tado X Enhanced is an independently maintained MIT-licensed derivative of Exabird's original integration. Retain the original and subsequent copyright notices in the repository's [LICENSE](../LICENSE).
 

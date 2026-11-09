@@ -235,5 +235,5 @@ class TadoXHolidayRefreshButton(CoordinatorEntity[TadoXDataUpdateCoordinator], B
         return DeviceInfo(identifiers={(DOMAIN, str(self.coordinator.home_id))})
 
     async def async_press(self) -> None:
-        await self.coordinator.holiday_mode_manager.refresh()
+        await self.coordinator.holiday_mode_manager.refresh(source="button")
         await self.coordinator.async_request_refresh()

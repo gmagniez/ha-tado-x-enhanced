@@ -1,6 +1,6 @@
 # Tado X Enhanced — Technical Architecture
 
-**Documented release:** Tado X Enhanced `1.1.2`  
+**Documented version:** Tado X Enhanced `1.2.0`  
 **Implementation source:** `custom_components/tado_x/` in this repository  
 **Integration domain:** `tado_x`  
 **Repository:** https://github.com/rleatherb/ha-tado-x-enhanced  
@@ -82,9 +82,9 @@ The integration depends on **cloud APIs**, not local Matter control. Endpoint av
 
 ### 4.1 API quota monitoring
 
-The client observes quota/remaining values from server response headers. It tracks previous observations, detects a substantial fall in used calls as evidence of a reset and derives an **estimated** next reset time. Home Assistant exposes quota, remaining calls, current usage and estimated daily usage sensors.
+The client observes quota/remaining values from server response headers. It tracks previous observations, detects a substantial fall in used calls as evidence of a reset and derives an **estimated** next reset time. Home Assistant exposes quota, remaining calls, current usage, observed rolling daily usage and theoretical daily usage sensors.
 
-The estimated daily percentage is a projection, not a Tado-issued forecast; it can be unavailable until enough observations have been collected, and can exceed 100%. The effective quota scope must not be assumed to be independent per home. The code includes nominal free and Auto-Assist limits of 100 and 20,000 calls/day respectively, but server-reported values should be preferred to assumptions.
+The observed estimated daily percentage is a rolling 60-minute projection from server quota-header observations, with a 10-minute minimum sampling period. The per-API-client history is bounded and held only in memory, is cleared on a counter decrease or quota change, and requires no extra API requests. It is not a Tado-issued forecast; it can be unavailable until enough observations have been collected, and can exceed 100%. A separate theoretical daily percentage is calculated from live coordinator options and schedule manager settings, using the number of discovered rooms and a per-feature periodic request model. The theoretical estimate updates on polling option changes without extra Tado API requests. The observed rolling estimate retains a fixed 60-minute window, but its stale-reading tolerance adapts to the main polling interval. The effective quota scope must not be assumed to be independent per home. The code includes nominal free and Auto-Assist limits of 100 and 20,000 calls/day respectively, but server-reported values should be preferred to assumptions.
 
 ## 5. Multi-home architecture and identity
 
@@ -107,7 +107,7 @@ Optional feature flags control additional data retrieval and entity availability
 - Flow-temperature optimisation
 - Domestic hot water
 
-These are per-home options. Defaults are influenced by the configured Auto-Assist status. Enabling additional datasets may increase API consumption.
+These are per-home options. Defaults are influenced by the configured Auto-Assist status. Enabling additional datasets may increase API consumption. Mobile Devices and Domestic Hot Water use the main coordinator interval. Weather, Air Comfort, Heating Running Times, Flow Temperature and Holiday Mode use a per-home supplementary multiplier (1×, 2×, 5× or 10× the main interval, default 5×). Supplementary datasets are cached between eligible checks. Holiday Mode retains a separate manager for manual reads and scheduled boundary callbacks, but no independent periodic timer. Flow Temperature actions invalidate the cache to read back the changed settings promptly. The `tado_x.set_polling_options` action and the options flow use the same live configuration update path; the action resolves an optional Tado X Home device, defaulting to the only configured home when unambiguous.
 
 **Schedule polling is separate from main coordinator polling.** The profile manager checks Home and Away configurations at an independently configured interval: 900–86,400 seconds, default 3,600 seconds. Automatic schedule checking defaults on for Auto-Assist configurations and off otherwise, subject to saved options. A full comparison ordinarily requires approximately **two schedule API requests per room**. Manual schedule refresh and profile actions remain available when automatic checking is disabled.
 
@@ -264,7 +264,7 @@ Before accepting a code change:
 
 ## 15. Provenance and validation scope
 
-This document describes the implementation packaged with Tado X Enhanced `1.1.2`, including the integration modules, manifest, action definitions and schedule-profile handling. Source inspection and static validation are distinct from live integration tests. For release-specific changes and test scope, consult [CHANGELOG.md](../CHANGELOG.md).
+This document describes the implementation packaged with Tado X Enhanced `1.2.0`, including the integration modules, manifest, action definitions and schedule-profile handling. Source inspection and static validation are distinct from live integration tests. For release-specific changes and test scope, consult [CHANGELOG.md](../CHANGELOG.md).
 
 Tado X Enhanced is an independently maintained MIT-licensed derivative of Exabird's original integration. Retain the original and subsequent copyright notices in the repository's [LICENSE](../LICENSE).
 

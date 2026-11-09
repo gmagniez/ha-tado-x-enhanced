@@ -11,6 +11,8 @@ import ssl
 
 from homeassistant.util.ssl import get_default_context
 
+from .rolling_quota import RollingQuotaEstimate
+
 from .const import (
     TADO_AUTH_URL,
     TADO_CLIENT_ID,
@@ -84,6 +86,7 @@ class TadoXApi:
         self._api_last_observed_at: datetime | None = None
         self._api_quota_limit: int | None = None
         self._api_quota_remaining: int | None = None
+        self._rolling_quota = RollingQuotaEstimate()
 
     @property
     def access_token(self) -> str | None:
@@ -157,6 +160,15 @@ class TadoXApi:
         """Return the API quota remaining from headers (if available)."""
         return self._api_quota_remaining
 
+    @property
+    def api_rolling_daily_usage(self) -> float | None:
+        """Projected daily quota usage from the last 60 minutes of observations."""
+        return self._rolling_quota.estimate(datetime.now(timezone.utc))
+
+    def configure_quota_observation_interval(self, seconds: int) -> None:
+        """Allow rolling observations to remain fresh at slower polling rates."""
+        self._rolling_quota.set_main_poll_interval(seconds)
+
     def _observe_quota_usage(self, quota: int, remaining: int) -> None:
         """Learn the server's daily reset from a genuine quota-counter drop.
 
@@ -182,6 +194,7 @@ class TadoXApi:
                     "Observed Tado API quota reset (previous=%s, now=%s, quota=%s)",
                     previous, used, quota,
                 )
+        self._rolling_quota.observe(now, quota, used)
         self._api_previous_used = used
         self._api_previous_quota = quota
         self._api_last_observed_at = now

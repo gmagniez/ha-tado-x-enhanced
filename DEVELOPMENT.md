@@ -1,3 +1,5 @@
+> **Release preparation (9 November 2026):** DEV-004 is the functional baseline for the proposed v1.2.0 release candidate. Historical notes below describe interim development decisions and are not necessarily the final defaults. Latest published version remains v1.1.2 until release approval.
+
 # Tado X Enhanced — Development Status
 
 **Repository:** https://github.com/rleatherb/ha-tado-x-enhanced  
@@ -73,3 +75,75 @@ Community contribution: DEV-003 draws on PR #5 (serialised refresh), PR #6 (SSL 
 Version 1.1.2 contains DEV-003 authentication reliability improvements. The release retains the existing integration domain, configuration-entry model, entities, actions, schedule profiles, climate timers, hot-water controls, Holiday Mode, historical data and API monitoring.
 
 Validation evidence includes static checks, standalone mocked authentication tests and the maintainer's successful live refresh/persistence observations for both independently authenticated homes. A complete Home Assistant regression run and live authentication-failure injection were not reported. Future maintenance should verify those scenarios when practical without exposing credentials or generating unnecessary API traffic.
+
+## DEV-004 — API polling and configuration (unreleased development build)
+
+- DEV-004.1: Schedule and Holiday Mode polling share the existing check interval, with independent enable/disable checkboxes. Holiday polling defaults to enabled for existing entries and supports live interval reconfiguration. Initial read, manual refresh, boundary events and action-triggered refresh are preserved.
+- DEV-004.2: Correct the coordinator per-update API accounting to include optional flow-temperature requests.
+- DEV-004.3: Explain three mandatory main-update requests, per-feature costs and theoretical scheduled daily usage; distinguish these from server-reported API usage. Detailed investigation of the historical predicted/observed discrepancy is deferred.
+- DEV-004.4: Optional reduced supplementary polling for weather, air comfort and running times, approximately every five main intervals. Off by default. Retain cached values between updates; discard running-time values from prior dates. Debug-only coordinator logs mark each actual supplementary API request (weather, air comfort, running times) with its home ID for live polling-cadence verification, without adding API calls.
+
+No release version change, GitHub commit or live Home Assistant/Tado API testing is implied by this development record.
+
+### DEV-004 Check 3 — polling diagnostics (unreleased)
+
+- Debug-only schedule and Holiday Mode polling configuration messages show enabled state, interval and home ID, including on live options changes.
+- Separate scheduled callbacks log `Schedule polling started` and `Holiday Mode polling started` only for periodic checks. Initial/manual schedule comparisons, Holiday Mode manual refreshes and Holiday Mode boundary-triggered refreshes do not emit these periodic markers.
+- No additional API requests or entity/configuration interface changes. These markers report the start of a check, not successful API completion.
+- Live verification of all four checkbox combinations remains pending.
+
+### DEV-004 consolidated design update (unreleased)
+
+- The supplementary reduction checkbox is replaced with a per-home selector of 1×, 2×, 5× or 10× (default 1×). No migration code is introduced for unpublished DEV-004 builds.
+- Supplementary features: Weather, Air Comfort, Heating Running Times, Flow Temperature and Holiday Mode. Mobile Devices and Hot Water remain on the main cadence; schedule checking remains independent. Holiday Mode no longer has a periodic timer separate from the coordinator.
+- Flow-temperature control actions invalidate the cached dataset before requesting a coordinator refresh. Holiday Mode initial/manual/boundary refreshes remain independent of periodic checks.
+- DEV-004.5: `tado_x.set_polling_options` action, using the standard optional Home device selector, with partial updates, shared live options logic, persistence and validation.
+- Earlier Check 3 Holiday Mode cadence results apply to the superseded shared-interval design and must be repeated for the new coordinator-driven polling.
+- No actual Home Assistant runtime testing of this consolidated design is claimed.
+
+### DEV-004 options UI correction (unpublished)
+
+- Main polling, Supplementary polling and Schedule checking are now native Home Assistant sections on one options page.
+- Supplementary multiplier is an explicit 1×/2×/5×/10× dropdown with 1× preselected for entries without a stored multiplier; existing selected values are retained.
+- Section form submissions are flattened before applying the existing shared polling configuration logic; stored entry keys and action parameters remain unchanged. No migration code is included.
+- Home Assistant frontend rendering and live persistence require user verification; static validation does not constitute a live HA test.
+
+- DEV-004 action UI correction: `set_polling_options` now shares the existing home-device resolution convention, requiring a Tado X Home device only for multi-home installations; the unpublished numeric `home_id` argument was removed.
+
+### DEV-004 Check 7 diagnostic logging (unpublished)
+
+Added source-labelled debug logs around Holiday Mode API reads (initial, periodic, button, action and boundary), including success and failure. The manual refresh button continues to bypass the supplementary polling cadence. No polling frequency, action interface or API request count is intentionally changed. This is static validation only; repeat Check 7A in Home Assistant.
+
+### DEV-004 default supplementary multiplier decision (unpublished)
+
+- Adopt **5×** as the supplementary polling default for new installations and upgrades from published releases without this option. At 30-second main polling, supplementary datasets are normally checked approximately every 150 seconds.
+- Preserve an explicitly stored multiplier, including 1×. No migration is required: absent values resolve to 5× in runtime and options, and the options form saves 5× when submitted.
+- Keep earlier DEV-004 notes describing the original 1× development default as historical context; the final intended default is now 5×.
+- This change does not affect the main polling interval, schedule checking interval, or immediate Holiday Mode reads. Home Assistant live testing of the new default remains pending.
+
+### DEV-004 Check 8C and regression review (unpublished)
+
+- Maintainer confirmed in Home Assistant that the 5× default is described in options and that existing explicit multipliers (1× for home 2243481 and 5× for home 1985739) were preserved after installing the default-5× build and restarting.
+- API monitoring source review: current usage uses the server-reported quota/remaining headers when available; estimated daily usage extrapolates observed consumption since the quota reset to a 24-hour rate. Neither sensor directly computes a forecast from the configured supplementary multiplier.
+- Corrected the source-level `tests/test_dev004.py` translation assertion to inspect the new three-section options schema. This fixes an obsolete test assumption, not a runtime issue. Standalone DEV-003, DEV-004, DEV-004.5 and default-5× checks pass. No new Home Assistant test is implied.
+
+### DEV-004 — Rolling API usage estimate (unpublished)
+
+- Replaced since-quota-reset daily extrapolation with a rolling 60-minute projection, based on existing API rate-limit response headers. No extra requests.
+- A minimum 10-minute observation period provides a provisional estimate; full-window stabilization takes 60 minutes. History is per API client/home, bounded, in memory only, and cleared on quota changes or counter decreases.
+- Existing API estimated daily usage sensor identity retained; current usage and remaining quota sensors unchanged. Live HA testing pending.
+
+### DEV-004 — complementary theoretical API usage projection (unpublished)
+
+Added the **API theoretical daily usage** sensor, preserving existing API sensor identities. The new home-scoped diagnostic projects the current periodic API workload immediately from the applied coordinator settings, supplementary multiplier, enabled features, independent schedule interval and discovered room count. Attributes separate main, supplementary and schedule contributions. The existing 60-minute observed estimate is unchanged except that its freshness tolerance now follows slower main polling. Live option changes notify sensors without issuing a Tado API refresh. No migration or new API requests. Requires Home Assistant verification; theoretical model excludes manual actions, retries, startup and API-specific variation.
+
+### DEV-004 — Configuration wording refinement (9 November 2026)
+
+Updated the Configure dialogue introduction to recommend quota-conscious starting settings for both subscription tiers, clarified that Auto-Assist does not automatically change a configured polling interval, standardised “API request” terminology, and shortened Weather, Air Comfort and Heating Running Times descriptions. Updated all five shipped translations and `docs/CONFIGURATION.md`. No polling logic or entity identities changed.
+
+### DEV-004 — Final Configure dialogue wording (9 November 2026)
+
+- Corrected quota warning Markdown so the full phrase “Keep actual usage below 100%” is bold. Home Assistant frontend rendering still requires visual verification.
+- Clarified that larger supplementary multipliers reduce polling frequency and API requests; removed the multiplier default from the Configure description without changing the actual 5× default.
+- Simplified Flow Temperature description and removed upgrade/default wording from schedule checking description.
+- Aligned `strings.json` and the five shipped translation files with the agreed options text. No functional code, entity identities, polling behaviour or API request counts changed.

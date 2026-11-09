@@ -2,7 +2,7 @@
 
 [README](../README.md) · [Schedules](SCHEDULES.md) · [Examples](EXAMPLES.md) · [Architecture](ARCHITECTURE.md)
 
-Tado X Enhanced v1.1.2 registers **19 actions** under `tado_x`, available in **Developer Tools → Actions**. The following parameters were checked against the service schemas in `custom_components/tado_x/__init__.py` and descriptions in `services.yaml`.
+Tado X Enhanced v1.2.0 registers **20 actions** under `tado_x`, available in **Developer Tools → Actions**. The following parameters were checked against the service schemas in `custom_components/tado_x/__init__.py` and descriptions in `services.yaml`.
 
 **Targeting:** `entity_id` identifies a room climate entity and resolves its home. For home-level actions, `device_id` identifies the **Tado X Home** device; it may be omitted only when a single home is configured. `set_temperature_offset` requires the physical device's `device_id`. Profile names are free-text strings (up to 80 characters), validated against the names defined for the selected home.
 
@@ -26,6 +26,7 @@ Tado X Enhanced v1.1.2 registers **19 actions** under `tado_x`, available in **D
 | `restore_schedule_profile_default` | Apply home-wide default to selected room | `entity_id`, `profile` (both required) |
 | `create_schedule_profile` | Create a custom home-wide profile class | `profile` (required), `device_id` (optional home device) |
 | `delete_schedule_profile` | Delete a custom home-wide profile class and its saved data | `profile` (required), `device_id` (optional home device); built-ins prohibited |
+| `set_polling_options` | Change per-home polling settings without restarting | `device_id` (optional for single home); any subset of supported polling fields listed below |
 | `reset_schedule_default` | Reset a built-in home-wide default to factory fallback | `profile` (required built-in name), `device_id` (optional home device) |
 
 ## Climate override example
@@ -68,3 +69,21 @@ Read and write operations require Tado cloud access and are subject to API quota
 
 ### Holiday Mode and the home switch
 `set_holiday_mode` offers local date/time pickers for optional start and end dates. YAML also accepts timezone-aware ISO-8601 timestamps. Both start and end times must be on a **30-minute boundary (HH:00 or HH:30)**. Supplying one date preserves the other existing boundary; date updates are checked against Tado after submission and raise an error if the dates are not retained. Explicit past start dates are accepted. The Holiday Mode switch provides automatic seven-day rescheduling only when the stored period has expired.
+
+## Programmatic polling configuration
+
+`tado_x.set_polling_options` accepts an optional Tado X Home `device_id` and any subset of polling options. The device is inferred when exactly one Tado X home is configured; with multiple homes, select the Tado X Home device. Unspecified options remain unchanged. All settings are validated before being saved and applied immediately, without a Home Assistant restart. Changes persist after restart.
+
+```yaml
+action: tado_x.set_polling_options
+data:
+  device_id: YOUR_TADO_X_HOME_DEVICE_ID
+  scan_interval: 300
+  supplementary_poll_multiplier: 10
+  enable_schedule_polling: false
+  enable_holiday_polling: true
+```
+
+The `device_id` line may be omitted for a single-home installation.
+
+Supported optional fields: `scan_interval` (30–3600), `supplementary_poll_multiplier` (1, 2, 5, 10), `schedule_poll_interval` (900–86400), `enable_schedule_polling`, `enable_holiday_polling`, `enable_weather`, `enable_air_comfort`, `enable_running_times`, `enable_flow_temp`, `enable_mobile_devices` and `enable_hot_water`. All `enable_*` fields are booleans. A day/night automation should also run at Home Assistant startup to restore the appropriate current setting after a restart.

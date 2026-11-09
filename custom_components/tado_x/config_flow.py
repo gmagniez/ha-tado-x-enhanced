@@ -10,10 +10,17 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import section
+from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import TadoXApi, TadoXAuthError
+from .polling_options import apply_polling_changes
 from .const import (
+    CONF_ENABLE_HOLIDAY_POLLING,
+    CONF_SUPPLEMENTARY_POLL_MULTIPLIER,
+    DEFAULT_SUPPLEMENTARY_POLL_MULTIPLIER,
+    SUPPLEMENTARY_POLL_MULTIPLIERS,
     CONF_ACCESS_TOKEN,
     CONF_ENABLE_AIR_COMFORT,
     CONF_ENABLE_FLOW_TEMP,
@@ -306,10 +313,19 @@ class TadoXOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
+            # HA sections submit nested dictionaries. Flatten only known fields;
+            # keep persisted configuration flat for existing runtime consumers.
+            user_input = {
+                **user_input.get("main_polling", {}),
+                **user_input.get("supplementary_polling", {}),
+                **user_input.get("schedule_checking", {}),
+            }
             has_auto_assist = user_input[CONF_HAS_AUTO_ASSIST]
             custom_interval = user_input.get(CONF_SCAN_INTERVAL)
             enable_schedule_polling = user_input.get(CONF_ENABLE_SCHEDULE_POLLING, has_auto_assist)
             schedule_poll_interval = user_input.get(CONF_SCHEDULE_POLL_INTERVAL, DEFAULT_SCHEDULE_POLL_INTERVAL)
+            enable_holiday_polling = user_input.get(CONF_ENABLE_HOLIDAY_POLLING, True)
+            supplementary_poll_multiplier = int(user_input.get(CONF_SUPPLEMENTARY_POLL_MULTIPLIER, DEFAULT_SUPPLEMENTARY_POLL_MULTIPLIER))
 
             # Get feature toggles
             enable_weather = user_input.get(CONF_ENABLE_WEATHER, has_auto_assist)
@@ -335,6 +351,8 @@ class TadoXOptionsFlow(OptionsFlow):
                 CONF_SCAN_INTERVAL: scan_interval,
                 CONF_ENABLE_SCHEDULE_POLLING: enable_schedule_polling,
                 CONF_SCHEDULE_POLL_INTERVAL: schedule_poll_interval,
+                CONF_ENABLE_HOLIDAY_POLLING: enable_holiday_polling,
+                CONF_SUPPLEMENTARY_POLL_MULTIPLIER: supplementary_poll_multiplier,
                 CONF_ENABLE_WEATHER: enable_weather,
                 CONF_ENABLE_MOBILE_DEVICES: enable_mobile_devices,
                 CONF_ENABLE_AIR_COMFORT: enable_air_comfort,
@@ -342,35 +360,35 @@ class TadoXOptionsFlow(OptionsFlow):
                 CONF_ENABLE_FLOW_TEMP: enable_flow_temp,
                 CONF_ENABLE_HOT_WATER: enable_hot_water,
             }
-            self.hass.config_entries.async_update_entry(
-                self.config_entry,
-                data=new_data,
+            coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+            # Tier changes are separate from polling settings but still persist.
+            if self.config_entry.data.get(CONF_HAS_AUTO_ASSIST) != has_auto_assist:
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, data={**self.config_entry.data, CONF_HAS_AUTO_ASSIST: has_auto_assist}
+                )
+                if coordinator:
+                    coordinator.api.has_auto_assist = has_auto_assist
+            await apply_polling_changes(
+                self.hass, self.config_entry, coordinator,
+                {key: value for key, value in new_data.items()
+                 if key in (CONF_SCAN_INTERVAL, CONF_ENABLE_SCHEDULE_POLLING,
+                            CONF_SCHEDULE_POLL_INTERVAL, CONF_ENABLE_HOLIDAY_POLLING,
+                            CONF_SUPPLEMENTARY_POLL_MULTIPLIER,
+    DEFAULT_SUPPLEMENTARY_POLL_MULTIPLIER, CONF_ENABLE_WEATHER,
+                            CONF_ENABLE_MOBILE_DEVICES, CONF_ENABLE_AIR_COMFORT,
+                            CONF_ENABLE_RUNNING_TIMES, CONF_ENABLE_FLOW_TEMP,
+                            CONF_ENABLE_HOT_WATER)},
             )
-
-            # Update the coordinator if it exists
-            if self.config_entry.entry_id in self.hass.data.get(DOMAIN, {}):
-                coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]
-                coordinator.api.has_auto_assist = has_auto_assist
-                coordinator.update_scan_interval(scan_interval)
-                manager = getattr(coordinator, "schedule_profile_manager", None)
-                if manager is not None:
-                    manager.configure_polling(enable_schedule_polling, schedule_poll_interval)
-                # Update feature flags
-                coordinator.enable_weather = enable_weather
-                coordinator.enable_mobile_devices = enable_mobile_devices
-                coordinator.enable_air_comfort = enable_air_comfort
-                coordinator.enable_running_times = enable_running_times
-                coordinator.enable_flow_temp = enable_flow_temp
-                coordinator.enable_hot_water = enable_hot_water
-
-                # Handle entity state changes when features are toggled
-                await self._update_entity_states(coordinator)
 
             return self.async_create_entry(title="", data={})
 
         current_auto_assist = self.config_entry.data.get(CONF_HAS_AUTO_ASSIST, False)
         current_schedule_polling = self.config_entry.data.get(CONF_ENABLE_SCHEDULE_POLLING, current_auto_assist)
         current_schedule_interval = self.config_entry.data.get(CONF_SCHEDULE_POLL_INTERVAL, DEFAULT_SCHEDULE_POLL_INTERVAL)
+        current_holiday_polling = self.config_entry.data.get(CONF_ENABLE_HOLIDAY_POLLING, True)
+        current_multiplier = int(self.config_entry.data.get(CONF_SUPPLEMENTARY_POLL_MULTIPLIER, DEFAULT_SUPPLEMENTARY_POLL_MULTIPLIER) or DEFAULT_SUPPLEMENTARY_POLL_MULTIPLIER)
+        if current_multiplier not in SUPPLEMENTARY_POLL_MULTIPLIERS:
+            current_multiplier = DEFAULT_SUPPLEMENTARY_POLL_MULTIPLIER
         current_interval = self.config_entry.data.get(CONF_SCAN_INTERVAL, 0)
 
         # Feature toggles - default to True for Auto-Assist, False for free tier
@@ -389,48 +407,58 @@ class TadoXOptionsFlow(OptionsFlow):
             else SCAN_INTERVAL_FREE_TIER
         )
 
+        # Section markers have no parent defaults: this allows Home Assistant
+        # to display the nested fields' actual stored/default values.
+        multiplier_selector = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[
+                    selector.SelectOptionDict(value=str(value), label=f"{value}×")
+                    for value in SUPPLEMENTARY_POLL_MULTIPLIERS
+                ],
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_HAS_AUTO_ASSIST,
-                        default=current_auto_assist,
-                    ): bool,
-                    vol.Optional(
-                        CONF_SCAN_INTERVAL,
-                        default=current_interval if current_interval > 0 else default_interval,
-                    ): vol.All(vol.Coerce(int), vol.Range(min=30, max=3600)),
-                    vol.Required(
-                        CONF_ENABLE_SCHEDULE_POLLING, default=current_schedule_polling,
-                    ): bool,
-                    vol.Required(
-                        CONF_SCHEDULE_POLL_INTERVAL, default=current_schedule_interval,
-                    ): vol.All(vol.Coerce(int), vol.Range(min=MIN_SCHEDULE_POLL_INTERVAL, max=86400)),
-                    vol.Required(
-                        CONF_ENABLE_WEATHER,
-                        default=current_enable_weather,
-                    ): bool,
-                    vol.Required(
-                        CONF_ENABLE_MOBILE_DEVICES,
-                        default=current_enable_mobile_devices,
-                    ): bool,
-                    vol.Required(
-                        CONF_ENABLE_AIR_COMFORT,
-                        default=current_enable_air_comfort,
-                    ): bool,
-                    vol.Required(
-                        CONF_ENABLE_RUNNING_TIMES,
-                        default=current_enable_running_times,
-                    ): bool,
-                    vol.Required(
-                        CONF_ENABLE_FLOW_TEMP,
-                        default=current_enable_flow_temp,
-                    ): bool,
-                    vol.Required(
-                        CONF_ENABLE_HOT_WATER,
-                        default=current_enable_hot_water,
-                    ): bool,
+                    vol.Required("main_polling"): section(
+                        vol.Schema({
+                            vol.Required(CONF_HAS_AUTO_ASSIST, default=current_auto_assist): bool,
+                            vol.Optional(
+                                CONF_SCAN_INTERVAL,
+                                default=current_interval if current_interval > 0 else default_interval,
+                            ): vol.All(vol.Coerce(int), vol.Range(min=30, max=3600)),
+                            vol.Required(CONF_ENABLE_MOBILE_DEVICES, default=current_enable_mobile_devices): bool,
+                            vol.Required(CONF_ENABLE_HOT_WATER, default=current_enable_hot_water): bool,
+                        }),
+                        {"collapsed": False},
+                    ),
+                    vol.Required("supplementary_polling"): section(
+                        vol.Schema({
+                            vol.Required(
+                                CONF_SUPPLEMENTARY_POLL_MULTIPLIER,
+    DEFAULT_SUPPLEMENTARY_POLL_MULTIPLIER,
+                                default=str(current_multiplier),
+                            ): multiplier_selector,
+                            vol.Required(CONF_ENABLE_WEATHER, default=current_enable_weather): bool,
+                            vol.Required(CONF_ENABLE_AIR_COMFORT, default=current_enable_air_comfort): bool,
+                            vol.Required(CONF_ENABLE_RUNNING_TIMES, default=current_enable_running_times): bool,
+                            vol.Required(CONF_ENABLE_FLOW_TEMP, default=current_enable_flow_temp): bool,
+                            vol.Required(CONF_ENABLE_HOLIDAY_POLLING, default=current_holiday_polling): bool,
+                        }),
+                        {"collapsed": False},
+                    ),
+                    vol.Required("schedule_checking"): section(
+                        vol.Schema({
+                            vol.Required(CONF_ENABLE_SCHEDULE_POLLING, default=current_schedule_polling): bool,
+                            vol.Required(
+                                CONF_SCHEDULE_POLL_INTERVAL,
+                                default=current_schedule_interval,
+                            ): vol.All(vol.Coerce(int), vol.Range(min=MIN_SCHEDULE_POLL_INTERVAL, max=86400)),
+                        }),
+                        {"collapsed": False},
+                    ),
                 }
             ),
         )

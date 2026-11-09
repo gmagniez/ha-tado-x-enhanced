@@ -4,7 +4,7 @@ An independently maintained custom integration for controlling and monitoring **
 
 Tado X Enhanced builds on the original [Tado X integration by exabird](https://github.com/exabird/ha-tado-x) (version v1.8.11), adding multi-home support, Home and Away schedule management, reusable schedule profiles, domestic hot-water controls, richer room diagnostics and API quota forecasting.
 
-> **Project status:** Current release: `1.1.2`. See [GitHub Releases](https://github.com/rleatherb/ha-tado-x-enhanced/releases) for the latest published version. Some features depend on your Tado hardware, subscription and API responses. This is a cloud-based integration and is subject to Tado API limits. Code development and documentation assisted by AI.
+> **Version:** 1.2.0. See [GitHub Releases](https://github.com/rleatherb/ha-tado-x-enhanced/releases) for available downloads. Some features depend on your Tado hardware, subscription and API responses. This is a cloud-based integration and is subject to Tado API limits. Code development and documentation assisted by AI.
 
 **[Changelog](CHANGELOG.md)** · [Report an issue](https://github.com/rleatherb/ha-tado-x-enhanced/issues) · [Releases](https://github.com/rleatherb/ha-tado-x-enhanced/releases)
 
@@ -18,7 +18,7 @@ Tado X Enhanced builds on the original [Tado X integration by exabird](https://g
 - **Historic data:** Retrieve historic data for temperature, humidity and heating (requires Tado Auto-Assist subscription for days before today).
 - **Hot water:** Where supported, view hot-water state, choose Schedule/Off/Boost and inspect boost or schedule-change timing.
 - **Open window status:** Open window expiry and remaining time available via `open_window_detected`, `open_window_ends_at`, and `open_window_remaining_minutes `climate attributes.
-- **API monitoring:** Track quota limit, remaining calls, current usage and estimated daily usage. Learn the approximate reset time from server-reported quota observations rather than assuming a fixed clock time.
+- **API monitoring:** Track quota limit, remaining calls, current usage, rolling observed daily usage and theoretical daily usage. Learn the approximate reset time from server-reported quota observations rather than assuming a fixed clock time.
 - **Additional data:** Heating running time, weather, air comfort, mobile presence and Energy IQ actions where supported and enabled.
 - **Authentication reliability:** Serialised token renewal, improved recovery from temporary authentication-server failures, and per-home debug logging for successful refreshes.
 - **Five languages:** English, German, French, Italian and Spanish.
@@ -74,13 +74,17 @@ Each configured Tado home has its own options under **Settings → Devices & ser
 | Auto-Assist subscription | Sets subscription-related defaults and feature availability assumptions. |
 | Main update interval | General integration polling, in seconds (configuration range: 30–3600). |
 | Automatically check for schedule changes | Enable periodic Home/Away schedule comparisons. Defaults to on for Auto-Assist and off otherwise, unless explicitly set. |
-| Schedule check interval | Separate schedule polling interval: 900–86400 seconds (15 minutes–24 hours); default 3600 seconds. |
+| Schedule check interval | Independent schedule polling interval: 900–86400 seconds (15 minutes–24 hours); default 3600 seconds. |
+| Supplementary polling multiplier | 1×, 2×, 5× or 10× main interval; higher values reduce supplementary API requests (default 5×). |
+| Automatically check for Holiday Mode changes | Enable periodic Holiday Mode polling at the supplementary interval. |
 | Weather | Enable weather data where available. |
 | Mobile devices | Enable mobile presence/tracker data. |
 | Air comfort | Enable air-comfort data. |
 | Running times | Enable heating running-time data. |
 | Flow temperature | Enable supported flow-temperature controls/data. |
 | Hot water | Enable domestic hot-water functionality where supported. |
+
+Polling settings can also be changed through `tado_x.set_polling_options`, without a restart. See [Configuration](docs/CONFIGURATION.md) for quota recommendations and the API usage sensors.
 
 **API usage matters:** A complete automatic schedule check uses approximately **two API calls per room** (one Home schedule and one Away settings read). For 10 rooms, hourly checks would use approximately **480 requests per day** for this feature alone. Manual profile operations and the **Refresh Schedule** button remain available when automatic schedule checking is disabled.
 
@@ -105,12 +109,13 @@ The integration initially captures the current room schedule as **Normal** if th
 
 ## Actions
 
-The integration exposes **19 actions** under `tado_x` in **Developer Tools → Actions**:
+The integration exposes **20 actions** under `tado_x` in **Developer Tools → Actions**:
 
 | Category | Actions |
 | :--- | :--- |
 | Temperature and Energy IQ | `set_temperature_offset`, `add_meter_reading`, `set_eiq_tariff`, `set_climate_timer` |
 | Home and Away schedules | `get_schedule`, `set_schedule`, `get_away_schedule`, `set_away_schedule` |
+| Polling configuration | `set_polling_options` |
 | History and holiday mode | `get_day_report`, `get_holiday_mode`, `set_holiday_mode` |
 | Schedule profiles | `save_schedule_profile`, `restore_schedule_profile`, `list_schedule_profiles`, `create_schedule_profile`, `delete_schedule_profile`, `save_schedule_profile_default`, `restore_schedule_profile_default`, `reset_schedule_default` |
 
@@ -141,7 +146,7 @@ The Restore schedule profile selector also exposes match information such as `ma
 
 - **API current usage** reports the proportion of the daily quota consumed.
 - **API reset time** is estimated from a substantial drop in server-reported calls used. It can remain `unknown` until a reset has been observed.
-- **API estimated daily usage** extrapolates consumption from elapsed time since the observed reset; it can exceed **100%**. It is deliberately unavailable during the first hour after a reset.
+- **API estimated daily usage** projects the current API request rate from a rolling **60-minute** window, allowing polling changes to be assessed much sooner. It can exceed **100%**. It displays `unknown` until at least 10 minutes of valid observations have accumulated after startup, a quota reset or a quota-counter correction. A full hour gives the most representative estimate.
 
 These calculations do not require additional API calls. They are estimates, not guarantees of Tado's future quota behaviour. Do not assume separate home sensors represent separate quota pools without verifying account-level reporting.
 
@@ -152,7 +157,7 @@ These calculations do not require additional API calls. They are estimates, not 
 - Tado's API is not controlled by this project and may change or impose request limits.
 - Multiple homes are supported, but verify service targeting and quota reporting when configuring more than one home.
 - The minimum supported Home Assistant release has **not yet been established by testing**. Do not infer compatibility solely from the manifest version.
-- The original `1.0.0` release was validated on a separate Home Assistant test installation, including a HACS handover from the original Exabird integration. Version `1.1.0` passed regression testing, including Home Assistant 2026.11 climate compatibility checks. For `1.1.1`, the maintainer confirmed that the Holiday Mode date-update correction works against the live Tado API. For `1.1.2`, automatic token refresh and credential persistence were confirmed for both homes; live authentication failure recovery and a complete regression run have not been verified. Compatibility with every earlier installation and Home Assistant release has not been established.
+- The original `1.0.0` release was validated on a separate Home Assistant test installation, including a HACS handover from the original Exabird integration. Version `1.1.0` passed regression testing, including Home Assistant 2026.11 climate compatibility checks. For `1.1.1`, the maintainer confirmed that the Holiday Mode date-update correction works against the live Tado API. For `1.1.2`, automatic token refresh and credential persistence were confirmed for both homes; live authentication failure recovery and a complete regression run have not been verified. For v1.2.0, the maintainer confirmed polling, options and action behaviour, API monitoring, and seven functional regression checks across the available homes. Flow Temperature was not available for live testing. Upgrade compatibility with every earlier installation and Home Assistant release has not been established.
 
 ## Releases and changes
 
@@ -226,3 +231,7 @@ max: 10
 
 ```
 
+
+### API usage projections
+
+The existing **API estimated daily usage** sensor extrapolates observed consumption over the last 60 minutes (provisional after 10 minutes). For slow polling, this can miss infrequent requests or temporarily overstate their contribution. Its freshness tolerance follows the configured main polling interval. The new **API theoretical daily usage** sensor immediately projects the periodic request workload from current main/supplementary/schedule settings and room count, with a per-category calls/day breakdown in attributes. Neither sensor makes extra API calls. The theoretical model excludes unpredictable activity and is not a guaranteed upper bound.

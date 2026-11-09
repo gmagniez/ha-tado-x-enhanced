@@ -13,6 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import TadoXApi, TadoXApiError, TadoXAuthError, TadoXRateLimitError
 from .const import (
     DEFAULT_TIMER_DURATION_MINUTES,
+    DEFAULT_SUPPLEMENTARY_POLL_MULTIPLIER,
     DOMAIN,
     SCAN_INTERVAL_AUTO_ASSIST,
     SCAN_INTERVAL_FREE_TIER,
@@ -125,6 +126,7 @@ class TadoXData:
     # Real values from Tado API response headers
     api_quota_limit: int | None = None  # From ratelimit-policy header (q=)
     api_quota_remaining: int | None = None  # From ratelimit header (r=)
+    api_rolling_daily_usage: float | None = None  # Recent 60-minute rate projection
     # Weather data
     weather: TadoXWeather | None = None
     # Mobile devices for geofencing
@@ -166,6 +168,7 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
         enable_running_times: bool = True,
         enable_flow_temp: bool = True,
         enable_hot_water: bool = True,
+        supplementary_poll_multiplier: int = DEFAULT_SUPPLEMENTARY_POLL_MULTIPLIER,
     ) -> None:
         """Initialize the coordinator."""
         # Determine scan interval based on subscription tier if not explicitly set
@@ -189,6 +192,7 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
         self.api.home_id = home_id
         self._save_api_stats_callback = save_api_stats_callback
         self._scan_interval = scan_interval
+        self.api.configure_quota_observation_interval(scan_interval)
         self.room_control_defaults: dict[int, TadoXRoomControlDefaults] = {}
 
         # Feature toggles for optional API calls
@@ -198,6 +202,9 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
         self.enable_running_times = enable_running_times
         self.enable_flow_temp = enable_flow_temp
         self.enable_hot_water = enable_hot_water
+        self.supplementary_poll_multiplier = supplementary_poll_multiplier
+        self._supplementary_last_success: dict[str, float] = {}
+        self._supplementary_cache: dict[str, Any] = {}
 
         _LOGGER.info(
             "Tado X coordinator initialized with %d second update interval (%s tier)",
@@ -212,6 +219,7 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
     def update_scan_interval(self, new_interval: int) -> None:
         """Update the scan interval dynamically."""
         self._scan_interval = new_interval
+        self.api.configure_quota_observation_interval(new_interval)
         self.update_interval = timedelta(seconds=new_interval)
         _LOGGER.info("Scan interval updated to %d seconds", new_interval)
 
@@ -229,7 +237,36 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
             calls += 1
         if self.enable_hot_water:
             calls += 1
+        if self.enable_flow_temp:
+            calls += 1
+        holiday_manager = getattr(self, "holiday_mode_manager", None)
+        if holiday_manager is not None and holiday_manager.poll_enabled:
+            calls += 1
         return calls
+
+    def should_refresh_supplementary(self, feature: str) -> bool:
+        """Return whether a supplementary API dataset is due for refresh."""
+        if self.supplementary_poll_multiplier == 1:
+            return True
+        from time import monotonic
+        last = self._supplementary_last_success.get(feature)
+        return last is None or monotonic() - last >= self._scan_interval * self.supplementary_poll_multiplier - min(1.0, self._scan_interval * 0.02)
+
+    def mark_supplementary_success(self, feature: str, value: Any) -> None:
+        """Cache successful data for reuse between reduced-frequency polls."""
+        from time import monotonic
+        self._supplementary_cache[feature] = value
+        self._supplementary_last_success[feature] = monotonic()
+
+    def update_supplementary_settings(self, multiplier: int) -> None:
+        """Apply a new multiplier, resetting due timestamps when it changes."""
+        if self.supplementary_poll_multiplier != multiplier:
+            self._supplementary_last_success.clear()
+        self.supplementary_poll_multiplier = multiplier
+
+    def invalidate_supplementary(self, feature: str) -> None:
+        """Ensure the next coordinator refresh fetches a changed setting."""
+        self._supplementary_last_success.pop(feature, None)
 
     def get_room_control_defaults(self, room_id: int) -> TadoXRoomControlDefaults:
         """Return per-room control defaults, creating them if missing."""
@@ -281,7 +318,10 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
             
             # Get weather data (optional)
             weather = None
-            if self.enable_weather:
+            if self.enable_weather and not self.should_refresh_supplementary("weather"):
+                weather = self._supplementary_cache.get("weather")
+            elif self.enable_weather:
+                _LOGGER.debug("Supplementary API request: weather (home_id=%s)", self.home_id)
                 weather_data = await self.api.get_weather()
                 outdoor_temp_data = weather_data.get("outsideTemperature") or {}
                 solar_data = weather_data.get("solarIntensity") or {}
@@ -292,6 +332,7 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
                     solar_intensity=solar_data.get("percentage"),
                     weather_state=weather_state_data.get("value"),
                 )
+                self.mark_supplementary_success("weather", weather)
 
             # Get mobile devices for geofencing (optional)
             mobile_devices_data = []
@@ -501,84 +542,79 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
                 )
                 data.mobile_devices[device_id] = mobile_device
 
-            # Fetch running times data for today (optional)
+            # Fetch running times (or reuse the latest same-day snapshot).
             if self.enable_running_times:
-                try:
-                    today = date.today().isoformat()
-                    running_times_data = await self.api.get_running_times(today, today)
-                    data.running_times = running_times_data
+                today = date.today().isoformat()
+                cached = self._supplementary_cache.get("running_times")
+                if (self.should_refresh_supplementary("running_times")
+                        or not cached or cached[0] != today):
+                    try:
+                        _LOGGER.debug("Supplementary API request: running_times (home_id=%s)", self.home_id)
+                        running_times_data = await self.api.get_running_times(today, today)
+                        self.mark_supplementary_success("running_times", (today, running_times_data))
+                    except Exception as err:
+                        _LOGGER.warning("Failed to fetch running times data: %s", err)
+                        running_times_data = cached[1] if cached and cached[0] == today else {}
+                else:
+                    running_times_data = cached[1]
+                data.running_times = running_times_data
+                for rt_entry in running_times_data.get("runningTimes", []):
+                    for zone_data in rt_entry.get("zones", []):
+                        zone_id = zone_data.get("id")
+                        if zone_id in data.rooms:
+                            data.rooms[zone_id].running_time_today_seconds = zone_data.get("runningTimeInSeconds", 0)
 
-                    # Process running times per zone/room
-                    # The API returns running times with zone IDs that correspond to room IDs
-                    running_times_list = running_times_data.get("runningTimes", [])
-                    for rt_entry in running_times_list:
-                        zones = rt_entry.get("zones", [])
-                        for zone_data in zones:
-                            zone_id = zone_data.get("id")
-                            zone_running_seconds = zone_data.get("runningTimeInSeconds", 0)
-                            if zone_id and zone_id in data.rooms:
-                                data.rooms[zone_id].running_time_today_seconds = zone_running_seconds
-
-                    _LOGGER.debug("Running times fetched: %s zones", len(running_times_list))
-                except Exception as err:
-                    # Running times endpoint might not be available for all accounts
-                    # Log warning but don't fail the entire update
-                    _LOGGER.warning("Failed to fetch running times data: %s", err)
-                    data.running_times = {}
-
-            # Fetch air comfort data (optional)
+            # Fetch air comfort, preserving the last successful snapshot.
             if self.enable_air_comfort:
-                try:
-                    air_comfort_data = await self.api.get_air_comfort()
-                    comfort_list = air_comfort_data.get("comfort", [])
-                    for comfort_entry in comfort_list:
-                        room_id = comfort_entry.get("roomId")
-                        if room_id:
-                            # Get humidity level (HUMID, COMFY, DRY)
-                            # The API returns humidityLevel directly in comfort_entry
-                            freshness = comfort_entry.get("humidityLevel")
+                if self.should_refresh_supplementary("air_comfort"):
+                    try:
+                        _LOGGER.debug("Supplementary API request: air_comfort (home_id=%s)", self.home_id)
+                        air_comfort_data = await self.api.get_air_comfort()
+                        comfort = {}
+                        for comfort_entry in air_comfort_data.get("comfort", []):
+                            room_id = comfort_entry.get("roomId")
+                            if room_id:
+                                comfort[room_id] = TadoXRoomAirComfort(
+                                    room_id=room_id,
+                                    freshness=comfort_entry.get("humidityLevel"),
+                                    comfort_level=comfort_entry.get("temperatureLevel"),
+                                )
+                        self.mark_supplementary_success("air_comfort", comfort)
+                    except Exception as err:
+                        _LOGGER.warning("Failed to fetch air comfort data: %s", err)
+                data.air_comfort = dict(self._supplementary_cache.get("air_comfort", {}))
 
-                            # Get temperature comfort level (COLD, COMFY, WARM)
-                            # The API returns temperatureLevel directly in comfort_entry
-                            comfort_level = comfort_entry.get("temperatureLevel")
-
-                            room_air_comfort = TadoXRoomAirComfort(
-                                room_id=room_id,
-                                freshness=freshness,
-                                comfort_level=comfort_level,
-                            )
-                            data.air_comfort[room_id] = room_air_comfort
-
-                    _LOGGER.debug("Air comfort fetched for %d rooms", len(data.air_comfort))
-                except Exception as err:
-                    # Air comfort endpoint might not be available for all accounts
-                    _LOGGER.warning("Failed to fetch air comfort data: %s", err)
-
-            # Fetch flow temperature optimization settings (if available and enabled)
+            # Flow-temperature configuration is cached between supplementary polls.
             if self.enable_flow_temp:
-                try:
-                    flow_data = await self.api.get_flow_temperature_optimization()
-                    if flow_data:
-                        data.has_flow_temp_control = True
-                        data.max_flow_temperature = flow_data.get("maxFlowTemperature")
-                        constraints = flow_data.get("maxFlowTemperatureConstraints", {})
-                        data.flow_temp_min = constraints.get("min")
-                        data.flow_temp_max = constraints.get("max")
-                        auto_adapt = flow_data.get("autoAdaptation", {})
-                        data.flow_temp_auto_adaptation = auto_adapt.get("enabled", False)
-                        data.flow_temp_auto_value = auto_adapt.get("maxFlowTemperature")
-                        _LOGGER.debug(
-                            "Flow temperature: %s°C (range %s-%s), auto=%s",
-                            data.max_flow_temperature,
-                            data.flow_temp_min,
-                            data.flow_temp_max,
-                            data.flow_temp_auto_adaptation,
-                        )
-                except Exception as err:
-                    # Flow temperature endpoint might not be available for all setups
-                    # (requires OpenTherm-compatible boiler control device)
-                    _LOGGER.debug("Flow temperature optimization not available: %s", err)
-                    data.has_flow_temp_control = False
+                flow_data = self._supplementary_cache.get("flow_temp")
+                if self.should_refresh_supplementary("flow_temp"):
+                    try:
+                        _LOGGER.debug("Supplementary API request: flow_temp (home_id=%s)", self.home_id)
+                        flow_data = await self.api.get_flow_temperature_optimization()
+                        self.mark_supplementary_success("flow_temp", flow_data)
+                    except Exception as err:
+                        _LOGGER.debug("Flow temperature optimization not available: %s", err)
+                if flow_data:
+                    data.has_flow_temp_control = True
+                    data.max_flow_temperature = flow_data.get("maxFlowTemperature")
+                    constraints = flow_data.get("maxFlowTemperatureConstraints") or {}
+                    data.flow_temp_min = constraints.get("min")
+                    data.flow_temp_max = constraints.get("max")
+                    auto_adapt = flow_data.get("autoAdaptation") or {}
+                    data.flow_temp_auto_adaptation = auto_adapt.get("enabled", False)
+                    data.flow_temp_auto_value = auto_adapt.get("maxFlowTemperature")
+
+            # Holiday Mode uses the same supplementary cadence but remains a
+            # separate manager for manual refreshes and boundary callbacks.
+            holiday_manager = getattr(self, "holiday_mode_manager", None)
+            if holiday_manager is not None and holiday_manager.poll_enabled:
+                if self.should_refresh_supplementary("holiday_mode"):
+                    try:
+                        _LOGGER.debug("Supplementary API request: holiday_mode (home_id=%s)", self.home_id)
+                        await holiday_manager.refresh(notify=False, source="periodic")
+                        self.mark_supplementary_success("holiday_mode", holiday_manager.data)
+                    except Exception as err:
+                        _LOGGER.warning("Holiday Mode periodic refresh failed for home %s: %s", self.home_id, err)
 
             # Populate API stats (prefer real values from headers when available)
             data.api_calls_today = self.api.api_calls_today
@@ -588,6 +624,7 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
             data.has_auto_assist = self.api.has_auto_assist
             data.api_quota_limit = self.api.api_quota_limit
             data.api_quota_remaining = self.api.api_quota_remaining
+            data.api_rolling_daily_usage = self.api.api_rolling_daily_usage
 
             # Save API stats for persistence
             if self._save_api_stats_callback:

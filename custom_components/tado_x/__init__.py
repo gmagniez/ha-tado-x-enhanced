@@ -18,6 +18,9 @@ from homeassistant.util import dt as dt_util
 
 from .api import TadoXApi, TadoXApiError, TadoXAuthError, summarize_day_report
 from .const import (
+    CONF_ENABLE_HOLIDAY_POLLING,
+    CONF_SUPPLEMENTARY_POLL_MULTIPLIER,
+    DEFAULT_SUPPLEMENTARY_POLL_MULTIPLIER,
     CONF_ACCESS_TOKEN,
     CONF_API_CALLS_TODAY,
     CONF_API_RESET_TIME,
@@ -42,6 +45,7 @@ from .const import (
 from .coordinator import TadoXDataUpdateCoordinator
 from .schedule_profiles import ProfileManager, DEFAULT_PROFILES, base_default_name
 from .holiday_mode import HolidayModeManager
+from .polling_options import POLLING_KEYS, apply_polling_changes
 from .const import CONF_ENABLE_SCHEDULE_POLLING, CONF_SCHEDULE_POLL_INTERVAL, DEFAULT_SCHEDULE_POLL_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
@@ -371,6 +375,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     enable_running_times = entry.data.get(CONF_ENABLE_RUNNING_TIMES, default_features)
     enable_flow_temp = entry.data.get(CONF_ENABLE_FLOW_TEMP, default_features)
     enable_hot_water = entry.data.get(CONF_ENABLE_HOT_WATER, default_features)
+    supplementary_poll_multiplier = entry.data.get(CONF_SUPPLEMENTARY_POLL_MULTIPLIER, DEFAULT_SUPPLEMENTARY_POLL_MULTIPLIER)
 
     # Create coordinator
     coordinator = TadoXDataUpdateCoordinator(
@@ -386,6 +391,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         enable_running_times=enable_running_times,
         enable_flow_temp=enable_flow_temp,
         enable_hot_water=enable_hot_water,
+        supplementary_poll_multiplier=supplementary_poll_multiplier,
     )
 
     # Fetch initial data
@@ -413,7 +419,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     holiday_manager = HolidayModeManager(
         hass, coordinator,
-        entry.data.get(CONF_SCHEDULE_POLL_INTERVAL, DEFAULT_SCHEDULE_POLL_INTERVAL),
+        enabled=entry.data.get(CONF_ENABLE_HOLIDAY_POLLING, True),
     )
     coordinator.holiday_mode_manager = holiday_manager
     await holiday_manager.start()
@@ -853,7 +859,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         """Return the current holiday mode settings."""
         service_coordinator = get_home_coordinator(call)
         try:
-            await service_coordinator.holiday_mode_manager.refresh()
+            await service_coordinator.holiday_mode_manager.refresh(source="action")
             return service_coordinator.holiday_mode_manager.data
         except TadoXApiError as err:
             raise HomeAssistantError(f"Failed to get holiday mode: {err}") from err
@@ -893,7 +899,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 start_date=holiday_action_datetime(call.data.get(ATTR_START_DATE)),
                 end_date=holiday_action_datetime(call.data.get(ATTR_END_DATE)),
             )
-            await service_coordinator.holiday_mode_manager.refresh()
+            await service_coordinator.holiday_mode_manager.refresh(source="action")
             await service_coordinator.async_request_refresh()
             _LOGGER.info("Holiday mode set to %s", call.data[ATTR_ENABLED])
         except TadoXApiError as err:
@@ -958,6 +964,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             SERVICE_SET_HOLIDAY_MODE,
             async_set_holiday_mode,
             schema=SERVICE_SET_HOLIDAY_MODE_SCHEMA,
+        )
+
+    # Programmatic polling configuration: all supplied fields are validated
+    # together before any change is persisted or applied.
+    async def async_set_polling_options(call: ServiceCall) -> None:
+        current = get_home_coordinator(call)
+        matching_entries = [
+            entry_id for entry_id, coordinator in hass.data.get(DOMAIN, {}).items()
+            if coordinator is current
+        ]
+        if len(matching_entries) != 1:
+            raise HomeAssistantError(f"Could not resolve Tado X config entry for home {current.home_id}")
+        target_entry = hass.config_entries.async_get_entry(matching_entries[0])
+        if target_entry is None:
+            raise HomeAssistantError(f"Tado X config entry missing for home {current.home_id}")
+        await apply_polling_changes(
+            hass, target_entry, current,
+            {key: value for key, value in call.data.items() if key in POLLING_KEYS},
+        )
+
+    if not hass.services.has_service(DOMAIN, "set_polling_options"):
+        hass.services.async_register(
+            DOMAIN, "set_polling_options", async_set_polling_options,
+            schema=vol.Schema({
+                vol.Optional(ATTR_HOME_DEVICE_ID): cv.string,
+                vol.Optional(CONF_SCAN_INTERVAL): vol.All(vol.Coerce(int), vol.Range(min=30, max=3600)),
+                vol.Optional(CONF_SCHEDULE_POLL_INTERVAL): vol.All(vol.Coerce(int), vol.Range(min=900, max=86400)),
+                vol.Optional(CONF_SUPPLEMENTARY_POLL_MULTIPLIER): vol.All(vol.Coerce(int), vol.In((1, 2, 5, 10))),
+                **{vol.Optional(key): bool for key in POLLING_KEYS
+                   if key not in (CONF_SCAN_INTERVAL, CONF_SCHEDULE_POLL_INTERVAL,
+                                  CONF_SUPPLEMENTARY_POLL_MULTIPLIER)},
+            }),
         )
 
     # Register parent devices before entities so links use actual registry IDs.

@@ -42,30 +42,53 @@
     "step": {
       "init": {
         "title": "Tado X Options",
-        "description": "Configure your Tado X integration settings.\n\n**API Quota:**\n- Without Auto-Assist: 100 requests/day → updates every 45 min\n- With Auto-Assist: 20,000 requests/day → updates every 30 sec",
-        "data": {
-          "has_auto_assist": "Auto-Assist subscription",
-          "scan_interval": "Update interval (seconds)",
-          "enable_weather": "Enable weather sensors",
-          "enable_mobile_devices": "Enable mobile device tracking",
-          "enable_air_comfort": "Enable air comfort sensors",
-          "enable_running_times": "Enable heating time sensors",
-          "enable_flow_temp": "Enable flow temperature control",
-          "enable_hot_water": "Enable hot water sensor",
-          "enable_schedule_polling": "Automatically check for schedule changes",
-          "schedule_poll_interval": "Schedule check interval (seconds)"
-        },
-        "data_description": {
-          "has_auto_assist": "Enable this if you have an Auto-Assist subscription. This will automatically adjust the update interval.",
-          "scan_interval": "How often to poll the Tado API (in seconds). Minimum: 30s, Maximum: 3600s (1 hour). Without Auto-Assist, keep at 2700s (45 min) to stay under 100 requests/day.",
-          "enable_weather": "Enables outdoor temperature, solar intensity, and weather state sensors. Uses 1 API call per update.",
-          "enable_mobile_devices": "Enables device trackers for mobile phones with geofencing. Uses 1 API call per update.",
-          "enable_air_comfort": "Enables air freshness and comfort level sensors per room. Uses 1 API call per update.",
-          "enable_running_times": "Enables heating time today sensors per room. Uses 1 API call per update.",
-          "enable_flow_temp": "Enables max flow temperature slider and auto-adaptation switch (requires OpenTherm boiler). Uses 1 API call per update.",
-          "enable_hot_water": "Enables domestic hot water state sensor. Uses 1 API call per update.",
-          "enable_schedule_polling": "Checks Home and Away schedules. Uses 2 API calls per room per update. Enabled by default with Auto-Assist; disabled by default without it.",
-          "schedule_poll_interval": "How often to check schedules when enabled. Minimum: 900 seconds (15 minutes); default: 3600 seconds (1 hour); maximum: 86400 seconds (24 hours)."
+        "description": "**Configure Tado X Enhanced to stay within your API quota.**\n\nTado limits API requests per home. Current daily allowances depend on your Auto-Assist subscription. The following starting settings are recommended:\n\n- **Without Auto-Assist (100 requests/day):** Main polling 3600 seconds; disable all optional polling and schedule checking.\n- **With Auto-Assist (20,000 requests/day):** Main polling 30 seconds; supplementary polling 5×; schedule checking 3600 seconds. Enable the features you need.\n\nYour Tado home device provides sensors showing your API allowance, actual usage, rolling daily estimate and theoretical daily usage based on your settings.\n\n**Keep actual usage below 100%** to avoid API updates being blocked until your allowance resets.",
+        "sections": {
+          "main_polling": {
+            "name": "Main polling",
+            "data": {
+              "has_auto_assist": "Auto-Assist subscription",
+              "scan_interval": "Update interval (seconds)",
+              "enable_mobile_devices": "Enable mobile device tracking",
+              "enable_hot_water": "Enable hot water sensor"
+            },
+            "data_description": {
+              "has_auto_assist": "Enable if you have Auto-Assist. This determines subscription-dependent features; configure polling intervals separately.",
+              "scan_interval": "Main polling interval (30–3600 seconds). Three core API requests plus enabled main-frequency features. Supplementary features use the selected multiplier; schedule checks use their own interval.",
+              "enable_mobile_devices": "Enables device trackers for mobile phones with geofencing. Uses 1 API call per update.",
+              "enable_hot_water": "Enables domestic hot water state sensor. Uses 1 API call per update."
+            }
+          },
+          "supplementary_polling": {
+            "name": "Supplementary polling",
+            "data": {
+              "supplementary_poll_multiplier": "Supplementary polling multiplier",
+              "enable_weather": "Enable weather sensors",
+              "enable_air_comfort": "Enable air comfort sensors",
+              "enable_running_times": "Enable heating time sensors",
+              "enable_flow_temp": "Enable flow temperature control",
+              "enable_holiday_polling": "Automatically check for Holiday Mode changes"
+            },
+            "data_description": {
+              "supplementary_poll_multiplier": "Supplementary data updates every 1×, 2×, 5× or 10× the main polling interval. Higher multipliers mean less frequent updates and fewer API requests. Applies to Weather, Air Comfort, Heating Running Times, Flow Temperature and Holiday Mode when enabled.",
+              "enable_weather": "Retrieve weather data at the supplementary polling interval (one API request per update).",
+              "enable_air_comfort": "Retrieve air comfort data at the supplementary polling interval (one API request per update).",
+              "enable_running_times": "Retrieve heating running times at the supplementary polling interval (one API request per update).",
+              "enable_flow_temp": "Retrieve flow temperature data at the supplementary polling interval (one API request per update).",
+              "enable_holiday_polling": "Checks Holiday Mode at the supplementary interval; initial, manual and boundary refreshes remain available."
+            }
+          },
+          "schedule_checking": {
+            "name": "Schedule checking",
+            "data": {
+              "enable_schedule_polling": "Automatically check for schedule changes",
+              "schedule_poll_interval": "Schedule checking interval (seconds)"
+            },
+            "data_description": {
+              "enable_schedule_polling": "Periodically check for changes to room schedules made outside Home Assistant. Uses additional API requests at the schedule-checking interval configured below.",
+              "schedule_poll_interval": "Independent schedule-profile checking interval (900–86400 seconds; default 3600)."
+            }
+          }
         }
       }
     }
@@ -351,6 +374,60 @@
           "name": "New profile name"
         }
       }
+    },
+    "set_polling_options": {
+      "name": "Set polling options",
+      "description": "Change polling settings for one Tado X home without restarting. Unspecified settings are unchanged.",
+      "fields": {
+        "home_id": {
+          "name": "Tado home ID",
+          "description": "Required ID of the Tado home to configure."
+        },
+        "scan_interval": {
+          "name": "Main update interval",
+          "description": "30–3600 seconds"
+        },
+        "supplementary_poll_multiplier": {
+          "name": "Supplementary polling multiplier",
+          "description": "1, 2, 5 or 10"
+        },
+        "schedule_poll_interval": {
+          "name": "Schedule check interval",
+          "description": "900–86400 seconds"
+        },
+        "enable_schedule_polling": {
+          "name": "Automatic schedule checking",
+          "description": "Enable or disable automatic schedule checking"
+        },
+        "enable_holiday_polling": {
+          "name": "Automatic Holiday Mode checking",
+          "description": "Enable or disable automatic holiday mode checking"
+        },
+        "enable_weather": {
+          "name": "Weather",
+          "description": "Enable or disable weather"
+        },
+        "enable_air_comfort": {
+          "name": "Air Comfort",
+          "description": "Enable or disable air comfort"
+        },
+        "enable_running_times": {
+          "name": "Heating Running Times",
+          "description": "Enable or disable heating running times"
+        },
+        "enable_flow_temp": {
+          "name": "Flow Temperature",
+          "description": "Enable or disable flow temperature"
+        },
+        "enable_mobile_devices": {
+          "name": "Mobile Devices",
+          "description": "Enable or disable mobile devices"
+        },
+        "enable_hot_water": {
+          "name": "Hot Water",
+          "description": "Enable or disable hot water"
+        }
+      }
     }
   },
   "entity": {
@@ -507,6 +584,9 @@
       },
       "holiday_end_local": {
         "name": "Holiday End (Local)"
+      },
+      "api_theoretical_daily_usage": {
+        "name": "API theoretical daily usage"
       }
     },
     "binary_sensor": {

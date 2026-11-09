@@ -32,7 +32,8 @@ Available entities vary with hardware, account capabilities and configuration.
 | :--- | :--- | :---: |
 | API calls today | The number of API calls made in the current 24-hour period. With an auto-assist subscription up to 20,000 calls can be made; without that only 100 calls are allowed. |  |
 | API current usage | Shows the percentage of the current daily allowance that has been used. |  |
-| API estimated daily usage | Estimates how the current usage rate will impact the daily allowance. Useful when configuring polling frequency and can exceed **100%**. It is deliberately unavailable during the first hour after the daily reset, during which time it will display `Unknown`. | 1.0.0 |
+| API estimated daily usage | Estimates how the current usage rate will impact the daily allowance. Useful when configuring polling frequency and can exceed **100%**. It uses a rolling 60-minute window of server-reported quota observations (minimum 10 minutes before a provisional estimate is available). After restart, quota reset or quota-counter correction, it temporarily displays `Unknown` while collecting observations. | 1.0.0 |
+| API theoretical daily usage | Immediate percentage projection of periodic API calls using the current main interval, supplementary multiplier, enabled features, independent schedule checking and room count. Attributes break down expected calls/day by category. Does not include unpredictable manual actions, retries or startup requests; not a guaranteed upper bound. | 1.2.0 |
 | API quota limit | Depends on whether an auto-assist subscription is present. |  |
 | API quota remaining | The number of API calls that remain within the daily allowance. |  |
 | API reset time | The daily API allowance is reset each day. The time that this happens varies between different users. This sensor monitors the API calls remaining to determine when the reset time will be. Note that this sensor will read 'Unknown' for up to 24 hours after first being installed, while the integration is determining when the reset time is. | 1.0.0 |
@@ -46,7 +47,7 @@ Available entities vary with hardware, account capabilities and configuration.
 
 #### API usage estimates
 
-These calculations do not require additional API calls. They are estimates, not guarantees of Tado's future quota behaviour.
+The 60-minute rolling estimate is based on observed consumption and can under- or overestimate when polling is infrequent; its freshness allowance follows the configured main polling interval. The theoretical estimate is immediate and based on periodic workload assumptions. Neither calculation requires additional API calls; neither is a guaranteed upper bound.
 
 | Diagnostic | Description | Version |
 | :--- | :--- | :---: |

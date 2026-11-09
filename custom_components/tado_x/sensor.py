@@ -22,6 +22,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api_projection import project_daily_api_usage
 from .const import DEVICE_TYPE_NAMES, API_QUOTA_FREE_TIER, API_QUOTA_PREMIUM, DOMAIN, FEATURE_ENTITY_MAP
 from .coordinator import (
     TadoXData,
@@ -205,25 +206,11 @@ def _get_api_usage_percentage(data: TadoXData) -> float:
 
 
 def _get_api_estimated_daily_usage(data: TadoXData) -> float | None:
-    """Project the daily quota usage using the observed reset boundary.
+    """Project daily quota consumption from recent API response observations.
 
-    Do not infer a reset from a fixed clock or from an unknown initial
-    baseline. Avoid extrapolation during the first hour after rollover.
+    The API client maintains the rolling window independently of entity reads.
     """
-    if data.api_last_reset is None or data.api_reset_time is None:
-        return None
-    now = dt_util.utcnow()
-    elapsed = (now - data.api_last_reset).total_seconds()
-    remaining = (data.api_reset_time - now).total_seconds()
-    if elapsed < 3600 or remaining <= 0 or elapsed >= 86400:
-        return None
-    if data.api_quota_limit is None or data.api_quota_remaining is None:
-        return None
-    quota = data.api_quota_limit
-    if quota <= 0:
-        return None
-    used = max(0, quota - data.api_quota_remaining)
-    return round(used * 86400 / elapsed / quota * 100, 1)
+    return data.api_rolling_daily_usage
 
 
 def _get_api_calls_today(data: TadoXData) -> int:
@@ -319,6 +306,14 @@ HOME_SENSORS: tuple[TadoXHomeSensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_get_api_estimated_daily_usage,
+    ),
+    TadoXHomeSensorEntityDescription(
+        key="api_theoretical_daily_usage",
+        translation_key="api_theoretical_daily_usage",
+        icon="mdi:calculator-variant",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: None,  # Calculated from live coordinator settings.
     ),
     TadoXHomeSensorEntityDescription(
         key="api_reset_time",
@@ -548,9 +543,53 @@ class TadoXHomeSensor(CoordinatorEntity[TadoXDataUpdateCoordinator], SensorEntit
             manufacturer="Tado",
         )
 
+    def _theoretical_projection(self):
+        """Calculate from live settings, not a stale config-entry snapshot."""
+        coordinator = self.coordinator
+        manager = getattr(coordinator, "schedule_profile_manager", None)
+        holiday = getattr(coordinator, "holiday_mode_manager", None)
+        return project_daily_api_usage(
+            quota=_get_api_quota(coordinator.data),
+            main_interval=coordinator._scan_interval,
+            multiplier=coordinator.supplementary_poll_multiplier,
+            weather=coordinator.enable_weather,
+            air_comfort=coordinator.enable_air_comfort,
+            running_times=coordinator.enable_running_times,
+            flow_temp=coordinator.enable_flow_temp,
+            holiday_mode=bool(holiday and holiday.poll_enabled),
+            mobile_devices=coordinator.enable_mobile_devices,
+            hot_water=coordinator.enable_hot_water,
+            schedule_enabled=bool(manager and manager.poll_enabled),
+            schedule_interval=manager.poll_interval if manager else 3600,
+            room_count=len(coordinator.data.rooms),
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        if self.entity_description.key != "api_theoretical_daily_usage":
+            return None
+        projection = self._theoretical_projection()
+        if projection is None:
+            return None
+        return {
+            "estimated_calls_per_day": round(projection.total, 1),
+            "main_calls_per_day": round(projection.main, 1),
+            "supplementary_calls_per_day": round(projection.supplementary, 1),
+            "schedule_calls_per_day": round(projection.schedule, 1),
+            "quota_allowance": _get_api_quota(self.coordinator.data),
+            "main_poll_interval_seconds": self.coordinator._scan_interval,
+            "supplementary_multiplier": self.coordinator.supplementary_poll_multiplier,
+            "schedule_poll_interval_seconds": getattr(getattr(self.coordinator, "schedule_profile_manager", None), "poll_interval", None),
+            "schedule_polling_enabled": bool(getattr(getattr(self.coordinator, "schedule_profile_manager", None), "poll_enabled", False)),
+            "room_count": len(self.coordinator.data.rooms),
+        }
+
     @property
     def native_value(self) -> Any:
         """Return the sensor value."""
+        if self.entity_description.key == "api_theoretical_daily_usage":
+            projection = self._theoretical_projection()
+            return round(projection.percentage, 1) if projection else None
         return self.entity_description.value_fn(self.coordinator.data)
 
     @callback

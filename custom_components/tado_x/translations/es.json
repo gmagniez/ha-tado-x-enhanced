@@ -42,30 +42,53 @@
     "step": {
       "init": {
         "title": "Opciones de Tado X",
-        "description": "Configura los ajustes de la integración Tado X.\n\n**Cuota de API:**\n- Sin Auto-Assist: 100 solicitudes/día → actualizaciones cada 45 min\n- Con Auto-Assist: 20 000 solicitudes/día → actualizaciones cada 30 s",
-        "data": {
-          "has_auto_assist": "Suscripción Auto-Assist",
-          "scan_interval": "Intervalo de actualización (segundos)",
-          "enable_weather": "Activar sensores meteorológicos",
-          "enable_mobile_devices": "Activar seguimiento de dispositivos móviles",
-          "enable_air_comfort": "Activar sensores de confort",
-          "enable_running_times": "Activar sensores de tiempo de calefacción",
-          "enable_flow_temp": "Activar control de temperatura de impulsión",
-          "enable_hot_water": "Activar sensor de agua caliente",
-          "enable_schedule_polling": "Comprobar automáticamente los cambios de programación",
-          "schedule_poll_interval": "Intervalo de comprobación de programas (segundos)"
-        },
-        "data_description": {
-          "has_auto_assist": "Activa esta opción si tienes una suscripción Auto-Assist. El intervalo de actualización se ajustará automáticamente.",
-          "scan_interval": "Frecuencia de consulta de la API Tado (segundos). Mínimo: 30 s; máximo: 3600 s. Sin Auto-Assist, utiliza 2700 s (45 min) para no superar 100 solicitudes al día.",
-          "enable_weather": "Activa los sensores de temperatura exterior, intensidad solar y estado meteorológico. Consume una llamada a la API por actualización.",
-          "enable_mobile_devices": "Activa el seguimiento por geolocalización de teléfonos móviles. Consume una llamada a la API por actualización.",
-          "enable_air_comfort": "Activa los sensores de frescura del aire y confort por habitación. Consume una llamada a la API por actualización.",
-          "enable_running_times": "Activa los sensores de tiempo de calefacción diario por habitación. Consume una llamada a la API por actualización.",
-          "enable_flow_temp": "Activa el control de temperatura máxima de impulsión y su adaptación automática (requiere caldera OpenTherm). Consume una llamada a la API por actualización.",
-          "enable_hot_water": "Activa el sensor de estado del agua caliente sanitaria. Consume una llamada a la API por actualización.",
-          "enable_schedule_polling": "Comprueba los programas de Casa y Ausente. Utiliza 2 llamadas a la API por habitación y actualización. Activado por defecto con Auto-Assist; desactivado en caso contrario.",
-          "schedule_poll_interval": "Frecuencia de comprobación cuando está activada. Mínimo: 900 segundos (15 minutos); predeterminado: 3600 segundos (1 hora); máximo: 86400 segundos (24 horas)."
+        "description": "**Configura Tado X Enhanced para mantenerte dentro de tu cuota de API.**\n\nTado limita las solicitudes de API por hogar. La cuota diaria depende de tu suscripción Auto-Assist. Ajustes iniciales recomendados:\n\n- **Sin Auto-Assist (100 solicitudes/día):** sondeo principal cada 3600 segundos; desactiva los sondeos opcionales y la comprobación de horarios.\n- **Con Auto-Assist (20.000 solicitudes/día):** sondeo principal cada 30 segundos; sondeo suplementario 5×; comprobación de horarios cada 3600 segundos. Activa las funciones que necesites.\n\nEl dispositivo de tu hogar Tado muestra sensores con la cuota de API, el uso real y las estimaciones diaria móvil y teórica según tu configuración.\n\n**Mantén el uso real por debajo del 100 %** para evitar que se bloqueen las actualizaciones de API hasta que se renueve la cuota.",
+        "sections": {
+          "main_polling": {
+            "name": "Main polling",
+            "data": {
+              "has_auto_assist": "Suscripción Auto-Assist",
+              "scan_interval": "Intervalo de actualización (segundos)",
+              "enable_mobile_devices": "Activar seguimiento de dispositivos móviles",
+              "enable_hot_water": "Activar sensor de agua caliente"
+            },
+            "data_description": {
+              "has_auto_assist": "Actívalo si tienes Auto-Assist. Determina las funciones dependientes de la suscripción; los intervalos de sondeo se configuran por separado.",
+              "scan_interval": "Intervalo de sondeo principal (30–3600 segundos). Tres solicitudes de API básicas más las funciones principales activadas. Las funciones suplementarias usan el multiplicador elegido; los horarios tienen su propio intervalo.",
+              "enable_mobile_devices": "Activa el seguimiento por geolocalización de teléfonos móviles. Consume una llamada a la API por actualización.",
+              "enable_hot_water": "Activa el sensor de estado del agua caliente sanitaria. Consume una llamada a la API por actualización."
+            }
+          },
+          "supplementary_polling": {
+            "name": "Supplementary polling",
+            "data": {
+              "supplementary_poll_multiplier": "Multiplicador de consultas complementarias",
+              "enable_weather": "Activar sensores meteorológicos",
+              "enable_air_comfort": "Activar sensores de confort",
+              "enable_running_times": "Activar sensores de tiempo de calefacción",
+              "enable_flow_temp": "Activar control de temperatura de impulsión",
+              "enable_holiday_polling": "Comprobar automáticamente los cambios del modo vacaciones"
+            },
+            "data_description": {
+              "supplementary_poll_multiplier": "Los datos complementarios se actualizan cada 1×, 2×, 5× o 10× el intervalo principal. Los multiplicadores mayores implican actualizaciones menos frecuentes y menos solicitudes API. Se aplica al tiempo, confort del aire, horas de calefacción, temperatura de impulsión y modo vacaciones cuando están habilitados.",
+              "enable_weather": "Obtiene datos meteorológicos en el intervalo suplementario (una solicitud de API por actualización).",
+              "enable_air_comfort": "Obtiene datos de confort del aire en el intervalo suplementario (una solicitud de API por actualización).",
+              "enable_running_times": "Obtiene los tiempos de calefacción en el intervalo suplementario (una solicitud de API por actualización).",
+              "enable_flow_temp": "Obtener la temperatura de impulsión en el intervalo complementario (una solicitud API por actualización).",
+              "enable_holiday_polling": "Comprueba el modo vacaciones según el intervalo complementario; las actualizaciones iniciales, manuales y de límites siguen disponibles."
+            }
+          },
+          "schedule_checking": {
+            "name": "Schedule checking",
+            "data": {
+              "enable_schedule_polling": "Comprobar automáticamente los cambios de programación",
+              "schedule_poll_interval": "Intervalo de comprobación de horarios (segundos)"
+            },
+            "data_description": {
+              "enable_schedule_polling": "Comprobar periódicamente los cambios en los horarios de las habitaciones realizados fuera de Home Assistant. Utiliza solicitudes API adicionales en el intervalo de comprobación configurado abajo.",
+              "schedule_poll_interval": "Independent schedule-profile checking interval (900–86400 seconds; default 3600)."
+            }
+          }
         }
       }
     }
@@ -351,6 +374,60 @@
           "name": "New profile name"
         }
       }
+    },
+    "set_polling_options": {
+      "name": "Set polling options",
+      "description": "Change polling settings for one Tado X home without restarting. Unspecified settings are unchanged.",
+      "fields": {
+        "home_id": {
+          "name": "Tado home ID",
+          "description": "Required ID of the Tado home to configure."
+        },
+        "scan_interval": {
+          "name": "Main update interval",
+          "description": "30–3600 seconds"
+        },
+        "supplementary_poll_multiplier": {
+          "name": "Supplementary polling multiplier",
+          "description": "1, 2, 5 or 10"
+        },
+        "schedule_poll_interval": {
+          "name": "Schedule check interval",
+          "description": "900–86400 seconds"
+        },
+        "enable_schedule_polling": {
+          "name": "Automatic schedule checking",
+          "description": "Enable or disable automatic schedule checking"
+        },
+        "enable_holiday_polling": {
+          "name": "Automatic Holiday Mode checking",
+          "description": "Enable or disable automatic holiday mode checking"
+        },
+        "enable_weather": {
+          "name": "Weather",
+          "description": "Enable or disable weather"
+        },
+        "enable_air_comfort": {
+          "name": "Air Comfort",
+          "description": "Enable or disable air comfort"
+        },
+        "enable_running_times": {
+          "name": "Heating Running Times",
+          "description": "Enable or disable heating running times"
+        },
+        "enable_flow_temp": {
+          "name": "Flow Temperature",
+          "description": "Enable or disable flow temperature"
+        },
+        "enable_mobile_devices": {
+          "name": "Mobile Devices",
+          "description": "Enable or disable mobile devices"
+        },
+        "enable_hot_water": {
+          "name": "Hot Water",
+          "description": "Enable or disable hot water"
+        }
+      }
     }
   },
   "entity": {
@@ -507,6 +584,9 @@
       },
       "holiday_end_local": {
         "name": "Holiday End (Local)"
+      },
+      "api_theoretical_daily_usage": {
+        "name": "Uso diario teórico de API"
       }
     },
     "binary_sensor": {

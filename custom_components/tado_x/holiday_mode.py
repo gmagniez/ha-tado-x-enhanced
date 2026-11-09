@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from homeassistant.helpers.event import async_track_point_in_utc_time, async_track_time_interval
+from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,12 +25,11 @@ def parse_time(value: Any) -> datetime | None:
 class HolidayModeManager:
     """Maintain a single holiday snapshot per Tado home."""
 
-    def __init__(self, hass, coordinator, interval: int) -> None:
+    def __init__(self, hass, coordinator, enabled: bool = True) -> None:
         self.hass = hass
         self.coordinator = coordinator
-        self.interval = max(900, int(interval))
+        self.poll_enabled = enabled
         self.data: dict[str, Any] | None = None
-        self._unsub_periodic = None
         self._unsub_events = []
         self._lock = asyncio.Lock()
 
@@ -55,27 +54,53 @@ class HolidayModeManager:
 
     async def start(self) -> None:
         try:
-            await self.refresh()
+            await self.refresh(source="initial")
         except Exception as err:  # Holiday API may not be available on every account.
             _LOGGER.warning("Holiday mode initial read failed for home %s: %s", self.coordinator.home_id, err)
-        self._unsub_periodic = async_track_time_interval(
-            self.hass, self._periodic, timedelta(seconds=self.interval)
+        self.configure_polling(self.poll_enabled)
+
+    def configure_polling(self, enabled: bool) -> None:
+        """Enable/disable coordinator-driven checks, preserving boundary events."""
+        if self.poll_enabled != enabled:
+            self.coordinator.invalidate_supplementary("holiday_mode")
+        self.poll_enabled = enabled
+        _LOGGER.debug(
+            "Holiday Mode polling configured: enabled=%s, multiplier=%s, home_id=%s",
+            enabled, self.coordinator.supplementary_poll_multiplier, self.coordinator.home_id,
         )
 
     async def _periodic(self, now) -> None:
         try:
-            await self.refresh()
+            await self.refresh(source="boundary")
         except Exception as err:
             _LOGGER.warning("Holiday mode refresh failed for home %s: %s", self.coordinator.home_id, err)
 
-    async def refresh(self) -> None:
+    async def refresh(self, *, notify: bool = True, source: str = "manual") -> None:
+        """Fetch Holiday Mode directly; source identifies why the read occurred."""
         async with self._lock:
-            data = await self.coordinator.api.get_holiday_mode()
+            _LOGGER.debug(
+                "Holiday Mode API request: source=%s (home_id=%s)",
+                source, self.coordinator.home_id,
+            )
+            try:
+                data = await self.coordinator.api.get_holiday_mode()
+            except Exception:
+                _LOGGER.exception(
+                    "Holiday Mode API request failed: source=%s (home_id=%s)",
+                    source, self.coordinator.home_id,
+                )
+                raise
             if not isinstance(data, dict) or "enabled" not in data:
                 raise ValueError("Holiday mode API response is incomplete")
             self.data = data
             self._schedule_events()
-            self.coordinator.async_update_listeners()
+            if notify:
+                self.coordinator.async_update_listeners()
+            self.coordinator.mark_supplementary_success("holiday_mode", self.data)
+            _LOGGER.debug(
+                "Holiday Mode API request succeeded: source=%s (home_id=%s)",
+                source, self.coordinator.home_id,
+            )
 
     def _schedule_events(self) -> None:
         for unsubscribe in self._unsub_events:
@@ -115,13 +140,10 @@ class HolidayModeManager:
                 start = start_dt.isoformat(timespec="seconds").replace("+00:00", "Z")
                 end = end_dt.isoformat(timespec="seconds").replace("+00:00", "Z")
         await self.coordinator.api.set_holiday_mode(enabled, start, end)
-        await self.refresh()
+        await self.refresh(source="action")
         await self.coordinator.async_request_refresh()
 
     def stop(self) -> None:
-        if self._unsub_periodic:
-            self._unsub_periodic()
-            self._unsub_periodic = None
         for unsubscribe in self._unsub_events:
             unsubscribe()
         self._unsub_events.clear()

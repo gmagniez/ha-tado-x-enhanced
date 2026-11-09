@@ -8,6 +8,25 @@ The project is independently maintained and is derived from the original Tado X 
 
 **[Readme](README.md)** · [Report an issue](https://github.com/rleatherb/ha-tado-x-enhanced/issues) · [Releases](https://github.com/rleatherb/ha-tado-x-enhanced/releases)
 
+## [1.2.0] - 2026-11-09
+
+### Added
+
+- Per-home main, supplementary and schedule polling controls, including independently enabled Holiday Mode polling and 1×/2×/5×/10× supplementary intervals (5× default).
+- `tado_x.set_polling_options` action for validated, persistent, immediately applied polling changes with multi-home device targeting.
+- Theoretical daily API usage sensor, showing a per-category projection from applied settings and room count.
+
+### Changed
+
+- Existing API estimated daily usage sensor now uses a rolling 60-minute observed-rate projection (provisional after ten minutes), with freshness tolerance based on main polling frequency.
+- Configure dialogue reorganised and clarified, including subscription-tier quota recommendations and supplementary multiplier explanations.
+- Supplementary feature polling retains previously retrieved values between updates; Holiday Mode manual, action and boundary refreshes bypass periodic throttling.
+
+### Validation and limitations
+
+- Maintainer reported seven of seven functional regression checks passed on live Home Assistant installations, including climate, timers, hot water, schedules, history, multi-home isolation and Holiday Mode boundary refresh. Polling settings, persistence and API estimates were also checked live.
+- Flow Temperature was not available on the test homes. Standalone automated and static tests do not establish compatibility with every Tado configuration or Home Assistant version. Theoretical API usage is a planning estimate, not a guaranteed upper bound.
+
 ## [1.1.2](https://github.com/rleatherb/ha-tado-x-enhanced/releases/tag/v1.1.2) - 2026-11-08
 
 ### Changed

@@ -33,12 +33,16 @@ DEFAULT_SCAN_INTERVAL: Final = 30  # seconds (legacy, use tier-specific)
 # API Rate Limits
 API_QUOTA_FREE_TIER: Final = 100  # requests per day without Auto-Assist
 API_QUOTA_PREMIUM: Final = 20000  # requests per day with Auto-Assist
-API_CALLS_PER_UPDATE: Final = 6  # get_rooms + get_rooms_and_devices + get_home_state + get_weather + get_mobile_devices + get_running_times
+API_CALLS_PER_UPDATE: Final = 3  # Legacy baseline: three mandatory coordinator requests; optional requests are dynamic
 
 # Config keys for options
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 CONF_ENABLE_SCHEDULE_POLLING: Final = "enable_schedule_polling"
 CONF_SCHEDULE_POLL_INTERVAL: Final = "schedule_poll_interval"
+CONF_ENABLE_HOLIDAY_POLLING: Final = "enable_holiday_polling"
+CONF_SUPPLEMENTARY_POLL_MULTIPLIER: Final = "supplementary_poll_multiplier"
+DEFAULT_SUPPLEMENTARY_POLL_MULTIPLIER: Final = 5
+SUPPLEMENTARY_POLL_MULTIPLIERS: Final = (1, 2, 5, 10)
 DEFAULT_SCHEDULE_POLL_INTERVAL: Final = 3600  # seconds
 MIN_SCHEDULE_POLL_INTERVAL: Final = 900  # seconds
 

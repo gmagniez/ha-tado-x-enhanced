@@ -481,3 +481,81 @@ reset_schedule_default:
             - Alternative
             - Eco
             - Not in use
+
+set_polling_options:
+  name: Set polling options
+  description: Change polling settings for one Tado X home without restarting Home Assistant. Unspecified settings remain unchanged and changes persist across restarts.
+  fields:
+    device_id:
+      name: Tado X Home device
+      description: Optional when only one Tado X home is configured; select the Tado X Home device when multiple homes are configured (not a room or thermostat).
+      required: false
+      selector:
+        device:
+          integration: tado_x
+    scan_interval:
+      name: Main update interval
+      description: Main coordinator polling interval, 30–3600 seconds.
+      selector:
+        number:
+          min: 30
+          max: 3600
+          mode: box
+    supplementary_poll_multiplier:
+      name: Supplementary polling multiplier
+      description: 1×, 2×, 5× or 10× the main interval, for enabled supplementary features.
+      selector:
+        select:
+          options:
+            - {label: "1× (normal)", value: "1"}
+            - {label: "2×", value: "2"}
+            - {label: "5×", value: "5"}
+            - {label: "10×", value: "10"}
+    schedule_poll_interval:
+      name: Schedule checking interval
+      description: Interval for automatic schedule comparisons, 900–86400 seconds.
+      selector:
+        number:
+          min: 900
+          max: 86400
+          mode: box
+    enable_schedule_polling:
+      name: Automatic schedule checking
+      description: Enable or disable automatic schedule checking polling for this home.
+      selector:
+        boolean:
+    enable_holiday_polling:
+      name: Automatic Holiday Mode checking
+      description: Enable or disable automatic holiday mode checking polling for this home.
+      selector:
+        boolean:
+    enable_weather:
+      name: Weather
+      description: Enable or disable weather polling for this home.
+      selector:
+        boolean:
+    enable_air_comfort:
+      name: Air Comfort
+      description: Enable or disable air comfort polling for this home.
+      selector:
+        boolean:
+    enable_running_times:
+      name: Heating Running Times
+      description: Enable or disable heating running times polling for this home.
+      selector:
+        boolean:
+    enable_flow_temp:
+      name: Flow Temperature
+      description: Enable or disable flow temperature polling for this home.
+      selector:
+        boolean:
+    enable_mobile_devices:
+      name: Mobile Devices
+      description: Enable or disable mobile devices polling for this home.
+      selector:
+        boolean:
+    enable_hot_water:
+      name: Domestic Hot Water
+      description: Enable or disable domestic hot water polling for this home.
+      selector:
+        boolean:

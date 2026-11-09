@@ -254,11 +254,13 @@ class TadoXFlowTempAutoAdaptationSwitch(CoordinatorEntity[TadoXDataUpdateCoordin
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable flow temperature auto-adaptation."""
         await self.coordinator.api.set_flow_temp_auto_adaptation(True)
+        self.coordinator.invalidate_supplementary("flow_temp")
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable flow temperature auto-adaptation."""
         await self.coordinator.api.set_flow_temp_auto_adaptation(False)
+        self.coordinator.invalidate_supplementary("flow_temp")
         await self.coordinator.async_request_refresh()
 
     @callback

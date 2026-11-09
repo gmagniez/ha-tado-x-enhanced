@@ -473,15 +473,26 @@ class ProfileManager:
             except Exception:
                 pass
 
+    async def _scheduled_poll(self, now):
+        """Periodic schedule check; separate from the initial/manual comparisons."""
+        if not self.poll_enabled:
+            return
+        _LOGGER.debug("Schedule polling started (home_id=%s)", self.coordinator.home_id)
+        await self.poll(now)
+
     def configure_polling(self, enabled: bool, interval: int):
         """Apply per-home polling options, including changes without restart."""
         interval = max(900, min(86400, int(interval)))
         self.stop()
         self.poll_enabled = bool(enabled)
         self.poll_interval = interval
+        _LOGGER.debug(
+            "Schedule polling configured: enabled=%s, interval=%s, home_id=%s",
+            self.poll_enabled, self.poll_interval, self.coordinator.home_id,
+        )
         if self.poll_enabled:
             self._unsubscribe = async_track_time_interval(
-                self.hass, self.poll, timedelta(seconds=interval)
+                self.hass, self._scheduled_poll, timedelta(seconds=interval)
             )
 
     def start(self):

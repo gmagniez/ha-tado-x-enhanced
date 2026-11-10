@@ -203,3 +203,7 @@ This is a heuristic, not a universal declaration that OpenTherm installations ca
 ### Hydronic balancing (switch; disabled by default)
 
 **Hydronic Balancing** is a home-level switch created when the Hops `settings/hydronicBalancing` endpoint returns a boolean `hydronicBalancingEnabled`. It displays On/Off, and optionally exposes `panasonic_therm_interface` as an attribute. It is disabled by default to reduce accidental operation. Turning it off can reset Tado's learned balancing parameters; add a confirmation to the dashboard and be aware that direct service calls bypass that confirmation. The write uses PATCH on the same settings endpoint and invalidates the cached state for immediate refresh. The last successful state is cached and rechecked once every 24 hours; unsupported endpoints do not create an entity. The cost is about one API request per home per day, accounted for in the theoretical quota projection.
+
+### Adaptive Heating (experimental switch)
+
+The home-level Adaptive Heating switch is created when `GET /homes/{home_id}/settings/adaptiveHeating` returns a boolean `adaptiveHeatingEnabled`. Reads are cached for 24 hours; errors do not cause repeated polling. Switching uses `PATCH` on that endpoint with `{"adaptiveHeatingEnabled": true/false}` and triggers immediate state refresh. **The GET response was observed on a live Tado installation, but the PATCH request shape is inferred from hydronic balancing and is not yet verified.**

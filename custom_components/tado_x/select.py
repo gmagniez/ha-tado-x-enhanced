@@ -213,6 +213,10 @@ class TadoXDhwModeSelect(CoordinatorEntity[TadoXDataUpdateCoordinator], SelectEn
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.home_id}_{description.key}"
+        # Relay-only mode actions are not verified for setpoint-capable
+        # OpenTherm systems; keep the selector opt-in on new installations.
+        if coordinator.data and coordinator.data.dhw_relay_actions_unverified:
+            self._attr_entity_registry_enabled_default = False
 
     @property
     def device_info(self) -> DeviceInfo:

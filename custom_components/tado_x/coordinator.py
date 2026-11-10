@@ -150,6 +150,7 @@ class TadoXData:
     dhw_setpoint: float | None = None
     dhw_setpoint_min: float | None = None
     dhw_setpoint_max: float | None = None
+    dhw_relay_actions_unverified: bool = False
     dhw_boost_ends: str | None = None
     dhw_next_schedule_change: str | None = None
 
@@ -362,6 +363,16 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
                 dhw_setpoint_max=dhw_setpoint_max,
                 dhw_boost_ends=dhw_boost_ends,
                 dhw_next_schedule_change=dhw_next_schedule_change,
+            )
+
+            # A setpoint-capable OpenTherm controller does not imply that
+            # relay-only DHW actions are supported. Keep them opt-in.
+            data.dhw_relay_actions_unverified = (
+                data.dhw_setpoint is not None
+                and any(
+                    device.get("thermInterfaceType") == "OPENTHERM"
+                    for device in (rooms_devices_data.get("otherDevices") or [])
+                )
             )
 
             # Process rooms, devices and Tado manual-control defaults

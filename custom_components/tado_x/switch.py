@@ -40,6 +40,9 @@ async def async_setup_entry(
     if coordinator.data and coordinator.data.has_flow_temp_control:
         entities.append(TadoXFlowTempAutoAdaptationSwitch(coordinator))
 
+    if coordinator.data.adaptive_heating_enabled is not None:
+        entities.append(TadoXAdaptiveHeatingSwitch(coordinator))
+
     # Hydronic balancing can reset its learned state when disabled.
     # Register controls on supported installations, initially disabled.
     if coordinator.data.hydronic_balancing_enabled is not None:
@@ -47,6 +50,53 @@ async def async_setup_entry(
 
     entities.append(TadoXHolidayModeSwitch(coordinator))
     async_add_entities(entities)
+
+
+class TadoXAdaptiveHeatingSwitch(
+    CoordinatorEntity[TadoXDataUpdateCoordinator], SwitchEntity
+):
+    """Control the per-home Adaptive Heating setting."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "adaptive_heating"
+    _attr_icon = "mdi:radiator"
+
+    def __init__(self, coordinator: TadoXDataUpdateCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.home_id}_adaptive_heating"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self.coordinator.home_id))},
+            name=self.coordinator.home_name,
+            manufacturer="Tado",
+            model="Tado X Home",
+        )
+
+    @property
+    def available(self) -> bool:
+        return (
+            super().available
+            and self.coordinator.data is not None
+            and self.coordinator.data.adaptive_heating_enabled is not None
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        data = self.coordinator.data
+        return data.adaptive_heating_enabled if data else None
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        await self.coordinator.api.set_adaptive_heating(enabled)
+        self.coordinator.invalidate_adaptive_heating()
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._set_enabled(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._set_enabled(False)
 
 
 class TadoXHydronicBalancingSwitch(

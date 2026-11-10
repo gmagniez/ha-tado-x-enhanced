@@ -8,6 +8,17 @@ The project is independently maintained and is derived from the original Tado X 
 
 **[Readme](README.md)** · [Report an issue](https://github.com/rleatherb/ha-tado-x-enhanced/issues) · [Releases](https://github.com/rleatherb/ha-tado-x-enhanced/releases)
 
+## [Unreleased]
+
+### Added
+
+- Read-only home-level Hydronic Balancing binary sensor when supported by the Tado Hops API, with 24-hour caching and a small addition to the theoretical API usage projection.
+
+### Validation and limitations
+
+- Uses the home settings endpoint without modifying balancing state; toggling is deliberately omitted because disabling may reset learned balancing parameters.
+- Live Home Assistant validation on compatible and unsupported Tado X homes is pending.
+
 ## [1.2.0] - 2026-11-09
 
 ### Added

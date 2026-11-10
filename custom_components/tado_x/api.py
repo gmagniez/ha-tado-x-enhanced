@@ -1153,7 +1153,7 @@ class TadoXApi:
         return result if isinstance(result, dict) else {}
 
     async def set_adaptive_heating(self, enabled: bool) -> None:
-        """Set Adaptive Heating (PATCH format requires live validation)."""
+        """Set Adaptive Heating using the observed Tado web API PATCH."""
         if not self._home_id:
             raise TadoXApiError("Home ID not set")
 

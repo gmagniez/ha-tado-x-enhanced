@@ -642,6 +642,11 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
             # since disabling can reset Tado's learned balancing behaviour.
             balancing = self._supplementary_cache.get("hydronic_balancing")
             if self.should_refresh_hydronic_balancing():
+                # Record attempts even on 404/unsupported homes. Repeated
+                # probes on every main poll would waste substantial quota.
+                from time import monotonic
+
+                self._supplementary_last_success["hydronic_balancing"] = monotonic()
                 try:
                     response = await self.api.get_hydronic_balancing()
                     if isinstance(response.get("hydronicBalancingEnabled"), bool):

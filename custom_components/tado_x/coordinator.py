@@ -145,6 +145,8 @@ class TadoXData:
     flow_temp_auto_adaptation: bool = False
     flow_temp_auto_value: int | None = None
     has_flow_temp_control: bool = False
+    hydronic_balancing_enabled: bool | None = None
+    hydronic_balancing_panasonic_interface: bool | None = None
     # Domestic hot water state (e.g., OFF, SCHEDULE_ON, SCHEDULE_OFF, BOOST)
     dhw_state: str | None = None
     dhw_setpoint: float | None = None
@@ -261,6 +263,17 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
         from time import monotonic
         self._supplementary_cache[feature] = value
         self._supplementary_last_success[feature] = monotonic()
+
+    def should_refresh_hydronic_balancing(self) -> bool:
+        """Fetch this slow-changing setting at most once every 24 hours."""
+        from time import monotonic
+
+        last = self._supplementary_last_success.get("hydronic_balancing")
+        return last is None or monotonic() - last >= 86400
+
+    def invalidate_hydronic_balancing(self) -> None:
+        """Refresh balancing status after a user-initiated change."""
+        self.invalidate_supplementary("hydronic_balancing")
 
     def update_supplementary_settings(self, multiplier: int) -> None:
         """Apply a new multiplier, resetting due timestamps when it changes."""
@@ -627,6 +640,30 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
                     auto_adapt = flow_data.get("autoAdaptation") or {}
                     data.flow_temp_auto_adaptation = auto_adapt.get("enabled", False)
                     data.flow_temp_auto_value = auto_adapt.get("maxFlowTemperature")
+
+            # Hydronic balancing is a slowly changing home-level setting.
+            # Cache a successful response for 24 hours. Writes explicitly\n            # invalidate this cache for an immediate subsequent GET.
+            balancing = self._supplementary_cache.get("hydronic_balancing")
+            if self.should_refresh_hydronic_balancing():
+                # Record attempts even on 404/unsupported homes. Repeated
+                # probes on every main poll would waste substantial quota.
+                from time import monotonic
+
+                self._supplementary_last_success["hydronic_balancing"] = monotonic()
+                try:
+                    response = await self.api.get_hydronic_balancing()
+                    if isinstance(response.get("hydronicBalancingEnabled"), bool):
+                        balancing = response
+                        self.mark_supplementary_success("hydronic_balancing", response)
+                except Exception as err:
+                    _LOGGER.debug("Hydronic balancing state unavailable for home %s: %s", self.home_id, err)
+            if isinstance(balancing, dict):
+                enabled = balancing.get("hydronicBalancingEnabled")
+                if isinstance(enabled, bool):
+                    data.hydronic_balancing_enabled = enabled
+                panasonic = balancing.get("isPanasonicThermInterfaceType")
+                if isinstance(panasonic, bool):
+                    data.hydronic_balancing_panasonic_interface = panasonic
 
             # Holiday Mode uses the same supplementary cadence but remains a
             # separate manager for manual refreshes and boundary callbacks.

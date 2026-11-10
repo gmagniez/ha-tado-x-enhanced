@@ -618,6 +618,9 @@
       },
       "holiday_mode": {
         "name": "Modalità vacanza"
+      },
+      "hydronic_balancing": {
+        "name": "Bilanciamento idraulico"
       }
     },
     "number": {

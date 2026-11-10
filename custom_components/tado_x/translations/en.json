@@ -618,6 +618,9 @@
       },
       "holiday_mode": {
         "name": "Holiday Mode"
+      },
+      "hydronic_balancing": {
+        "name": "Hydronic Balancing"
       }
     },
     "number": {

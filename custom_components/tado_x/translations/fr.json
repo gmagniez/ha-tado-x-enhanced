@@ -618,6 +618,9 @@
       },
       "holiday_mode": {
         "name": "Mode vacances"
+      },
+      "hydronic_balancing": {
+        "name": "Équilibrage hydraulique"
       }
     },
     "number": {

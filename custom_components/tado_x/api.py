@@ -1141,6 +1141,28 @@ class TadoXApi:
         )
         return result if isinstance(result, dict) else {}
 
+    async def get_hydronic_balancing(self) -> dict[str, Any]:
+        """Read hydronic balancing configuration."""
+        if not self._home_id:
+            raise TadoXApiError("Home ID not set")
+
+        result = await self._request(
+            "GET",
+            f"{TADO_HOPS_API_URL}/homes/{self._home_id}/settings/hydronicBalancing",
+        )
+        return result if isinstance(result, dict) else {}
+
+    async def set_hydronic_balancing(self, enabled: bool) -> None:
+        """Update hydronic balancing; disabling may reset learned settings."""
+        if not self._home_id:
+            raise TadoXApiError("Home ID not set")
+
+        await self._request(
+            "PATCH",
+            f"{TADO_HOPS_API_URL}/homes/{self._home_id}/settings/hydronicBalancing",
+            json_data={"hydronicBalancingEnabled": enabled},
+        )
+
     # Flow Temperature Optimization endpoints
     async def get_flow_temperature_optimization(self) -> dict[str, Any]:
         """Get flow temperature optimization settings.

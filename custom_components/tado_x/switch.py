@@ -40,8 +40,72 @@ async def async_setup_entry(
     if coordinator.data and coordinator.data.has_flow_temp_control:
         entities.append(TadoXFlowTempAutoAdaptationSwitch(coordinator))
 
+    # Hydronic balancing can reset its learned state when disabled.
+    # Register controls on supported installations, initially disabled.
+    if coordinator.data.hydronic_balancing_enabled is not None:
+        entities.append(TadoXHydronicBalancingSwitch(coordinator))
+
     entities.append(TadoXHolidayModeSwitch(coordinator))
     async_add_entities(entities)
+
+
+class TadoXHydronicBalancingSwitch(
+    CoordinatorEntity[TadoXDataUpdateCoordinator], SwitchEntity
+):
+    """Home-level hydronic balancing control.
+
+    Turning the feature off can reset Tado's learned balancing data.
+    Dashboard confirmation is recommended but cannot protect service calls.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "hydronic_balancing"
+    _attr_icon = "mdi:pipe"
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, coordinator: TadoXDataUpdateCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.home_id}_hydronic_balancing"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self.coordinator.home_id))},
+            name=self.coordinator.home_name,
+            manufacturer="Tado",
+            model="Tado X Home",
+        )
+
+    @property
+    def available(self) -> bool:
+        return (
+            super().available
+            and self.coordinator.data is not None
+            and self.coordinator.data.hydronic_balancing_enabled is not None
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        data = self.coordinator.data
+        return data.hydronic_balancing_enabled if data else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, bool] | None:
+        data = self.coordinator.data
+        if data and data.hydronic_balancing_panasonic_interface is not None:
+            return {"panasonic_therm_interface": data.hydronic_balancing_panasonic_interface}
+        return None
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        await self.coordinator.api.set_hydronic_balancing(enabled)
+        self.coordinator.invalidate_hydronic_balancing()
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._set_enabled(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._set_enabled(False)
 
 
 class TadoXChildLockSwitch(CoordinatorEntity[TadoXDataUpdateCoordinator], SwitchEntity):

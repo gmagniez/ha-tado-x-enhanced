@@ -40,6 +40,8 @@ def project_daily_api_usage(
     main = SECONDS_PER_DAY / main_interval * (3 + int(mobile_devices) + int(hot_water))
     supplementary_count = sum((weather, air_comfort, running_times, flow_temp, holiday_mode))
     supplementary = SECONDS_PER_DAY / (main_interval * multiplier) * supplementary_count
+    # Read-only hydronic balancing settings are refreshed once per 24 hours.
+    supplementary += 1.0
     schedule = (SECONDS_PER_DAY / schedule_interval * 2 * room_count
                 if schedule_enabled else 0.0)
     total = main + supplementary + schedule

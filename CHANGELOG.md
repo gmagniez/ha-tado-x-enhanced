@@ -14,7 +14,7 @@ The project is independently maintained and is derived from the original Tado X 
 
 - Opt-in home-level Hydronic Balancing switch (disabled by default) when supported by the Tado Hops API, with 24-hour caching and a small addition to the theoretical API usage projection.
 
-- Experimental Adaptive Heating switch on supported homes, with cached GET status and a PATCH command inferred from the hydronic balancing API.
+- Adaptive Heating switch on supported homes, with cached GET status and PATCH control observed in the official Tado web app; disabling resets the learned heating behavior.
 
 ### Validation and limitations
 

@@ -98,9 +98,9 @@ This is a conservative default, **not** a definitive hardware capability test: `
 
 ### Hydronic balancing status
 
-Where supported by Tado, a read-only **Hydronic Balancing** binary sensor is available on the home device. It reads `GET /homes/{home_id}/settings/hydronicBalancing` and reflects the `hydronicBalancingEnabled` field (On/Off). The optional `isPanasonicThermInterfaceType` field is exposed as a diagnostic attribute.
+Where supported by Tado, a **Hydronic Balancing** switch (disabled by default) is available on the home device. It reads `GET /homes/{home_id}/settings/hydronicBalancing` and reflects the `hydronicBalancingEnabled` field (On/Off). The optional `isPanasonicThermInterfaceType` field is exposed as a diagnostic attribute.
 
-A successful response is cached for 24 hours, resulting in approximately **one additional API call per day per configured home** (included in the theoretical API usage estimate). The feature is not shown if no valid state is returned at startup. Transient errors preserve the last known state. No enable/disable switch is provided: turning off Tado hydronic balancing can reset its learned settings.
+A successful response is cached for 24 hours, resulting in approximately **one additional API call per day per configured home** (included in the theoretical API usage estimate). The feature is not shown if no valid state is returned at startup. Transient errors preserve the last known state. The switch uses the official web app's observed `PATCH /homes/{home_id}/settings/hydronicBalancing` request with `{\"hydronicBalancingEnabled\": true/false}`. **Disabling balancing can reset learned settings**. Enable this entity deliberately, and add a Home Assistant dashboard confirmation to any off action. Dashboard confirmations do not guard scripts, automations or direct service calls. After a write, the cached state is invalidated and refreshed.
 
 ## Devices and entities
 

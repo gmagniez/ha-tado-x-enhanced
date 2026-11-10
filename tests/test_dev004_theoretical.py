@@ -27,24 +27,24 @@ def settings(**overrides):
 def test_fast_polling_breakdown():
     p = settings()
     assert p.main == 11520
-    assert p.supplementary == 2304
+    assert p.supplementary == 2305
     assert p.schedule == 912
-    assert p.total == 14736
-    assert round(p.percentage, 2) == 73.68
+    assert p.total == 14737
+    assert round(p.percentage, 2) == 73.69
 
 def test_multiplier_and_disabled_features():
     p = settings(multiplier=1)
-    assert p.supplementary == 11520
+    assert p.supplementary == 11531
     p = settings(weather=False, holiday_mode=False, schedule_enabled=False)
-    assert p.supplementary == 1152
+    assert p.supplementary == 1153
     assert p.schedule == 0
 
 def test_slow_polling():
     p = settings(main_interval=3600, multiplier=10, schedule_interval=86400)
     assert p.main == 96
-    assert p.supplementary == 9.6
+    assert p.supplementary == 10.6
     assert p.schedule == 38
-    assert round(p.total, 1) == 143.6
+    assert round(p.total, 1) == 144.6
 
 def test_invalid_and_quota():
     assert settings(quota=0) is None

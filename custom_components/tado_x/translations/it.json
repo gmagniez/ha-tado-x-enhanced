@@ -621,6 +621,9 @@
       }
     },
     "number": {
+      "dhw_setpoint": {
+        "name": "Temperatura acqua calda"
+      },
       "max_flow_temperature": {
         "name": "Temperatura massima flusso"
       },

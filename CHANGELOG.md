@@ -12,11 +12,11 @@ The project is independently maintained and is derived from the original Tado X 
 
 ### Added
 
-- Read-only home-level Hydronic Balancing binary sensor when supported by the Tado Hops API, with 24-hour caching and a small addition to the theoretical API usage projection.
+- Opt-in home-level Hydronic Balancing switch (disabled by default) when supported by the Tado Hops API, with 24-hour caching and a small addition to the theoretical API usage projection.
 
 ### Validation and limitations
 
-- Uses the home settings endpoint without modifying balancing state; toggling is deliberately omitted because disabling may reset learned balancing parameters.
+- Reads and writes the home settings endpoint. Turning off balancing may reset learned parameters; UI confirmation is recommended but not enforced for direct service calls.
 - Live Home Assistant validation on compatible and unsupported Tado X homes is pending.
 
 ## [1.2.0] - 2026-11-09

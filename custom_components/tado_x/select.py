@@ -104,6 +104,18 @@ async def async_setup_entry(
         if not entity_entry.unique_id:
             continue
 
+        # Preserve default-disabled relay controls on setpoint-capable
+        # OpenTherm homes. Also preserve any existing user-enabled entities:
+        # the generic feature-flag reconciliation must not override either.
+        if coordinator.data and coordinator.data.dhw_relay_actions_unverified:
+            relay_keys = (
+                ("boost_hot_water", "disable_hot_water", "resume_hot_water_schedule")
+                if entity_entry.domain == "button"
+                else ("dhw_mode",)
+            )
+            if any(entity_entry.unique_id.endswith(f"_{key}") for key in relay_keys):
+                continue
+
         # Check if this entity matches a disabled feature
         should_be_disabled = False
         for feature_flag, entity_keys in FEATURE_ENTITY_MAP.items():
@@ -213,6 +225,10 @@ class TadoXDhwModeSelect(CoordinatorEntity[TadoXDataUpdateCoordinator], SelectEn
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.home_id}_{description.key}"
+        # Relay-only mode actions are not verified for setpoint-capable
+        # OpenTherm systems; keep the selector opt-in on new installations.
+        if coordinator.data and coordinator.data.dhw_relay_actions_unverified:
+            self._attr_entity_registry_enabled_default = False
 
     @property
     def device_info(self) -> DeviceInfo:

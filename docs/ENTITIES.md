@@ -190,3 +190,12 @@ The Tado X Home device provides a Holiday Mode switch, Holiday Status sensor (Of
 The existing **Holiday Start** and **Holiday End** entities remain timestamp sensors for automations. Home Assistant may display these as relative dates. The additional **Holiday Start (Local)** and **Holiday End (Local)** text sensors display an absolute local date and time, for example `01 Nov 2026, 07:00`. Timestamp sensors also provide a `local_datetime` attribute.
 
 When Holiday Mode is active, the hot-water API may report `HOLIDAY_MODE_OFF`. **Hot Water State** retains this diagnostic API value; **Hot Water Mode** displays Off. Holiday switches and refreshes trigger an additional home coordinator refresh to update the hot-water entities.
+
+### OpenTherm hot water setpoint and relay capabilities
+
+On some European Tado X TR04 receivers connected using OpenTherm, the Hops API returns a configurable domestic hot water `setpoint` and `setpointConstraints` (for example 30–65 °C) with `state: MANUAL_ON`. A **Hot Water Temperature** number entity is then available, and its writes use `POST /programmer/domesticHotWater/manualControl` with a `setpoint` payload. The **Hot Water State** sensor supports `MANUAL_ON` / `MANUAL_OFF`.
+
+If the same home reports `thermInterfaceType: OPENTHERM`, the relay-oriented DHW buttons (**Boost Hot Water**, **Turn Off Hot Water**, **Resume Hot Water Schedule**) and **Hot Water Mode** selector are **disabled by default for newly registered entities**. This avoids displaying likely unusable actions on a setpoint-capable OpenTherm home, while preserving already registered entities and explicit user choices. Users may enable controls manually if applicable.
+
+This is a heuristic, not a universal declaration that OpenTherm installations cannot support DHW mode changes. A returned `No RELAY DHW device in home` error indicates the specific relay command is not supported by the installation. The account's `features` list (e.g. adaptiveHeating, hydronicBalancing) does not advertise relay capability.
+

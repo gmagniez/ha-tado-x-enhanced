@@ -621,6 +621,9 @@
       }
     },
     "number": {
+      "dhw_setpoint": {
+        "name": "Température de l’eau chaude"
+      },
       "max_flow_temperature": {
         "name": "Température maximale de départ"
       },

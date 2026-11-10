@@ -336,7 +336,7 @@ HOME_SENSORS: tuple[TadoXHomeSensorEntityDescription, ...] = (
         translation_key="dhw_state",
         icon="mdi:water-boiler",
         device_class=SensorDeviceClass.ENUM,
-        options=["OFF", "SCHEDULE_OFF", "SCHEDULE_ON", "BOOST", "AWAY_OFF", "AWAY_ON", "HOLIDAY_MODE_OFF", "HOLIDAY_MODE_ON"],
+        options=["OFF", "SCHEDULE_OFF", "SCHEDULE_ON", "BOOST", "MANUAL_ON", "MANUAL_OFF", "AWAY_OFF", "AWAY_ON", "HOLIDAY_MODE_OFF", "HOLIDAY_MODE_ON"],
         value_fn=_get_domestic_hot_water_state,
     ),
     TadoXHomeSensorEntityDescription(

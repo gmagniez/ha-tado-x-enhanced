@@ -590,9 +590,6 @@
       }
     },
     "binary_sensor": {
-      "hydronic_balancing": {
-        "name": "Equilibrado hidráulico"
-      },
       "window_open": {
         "name": "Ventana abierta"
       },
@@ -621,6 +618,9 @@
       },
       "holiday_mode": {
         "name": "Modo vacaciones"
+      },
+      "hydronic_balancing": {
+        "name": "Equilibrado hidráulico"
       }
     },
     "number": {

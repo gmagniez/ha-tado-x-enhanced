@@ -590,6 +590,9 @@
       }
     },
     "binary_sensor": {
+      "hydronic_balancing": {
+        "name": "Hydronic Balancing"
+      },
       "window_open": {
         "name": "Window Open"
       },

@@ -88,6 +88,14 @@ Polling settings can also be changed through `tado_x.set_polling_options`, witho
 
 **API usage matters:** A complete automatic schedule check uses approximately **two API calls per room** (one Home schedule and one Away settings read). For 10 rooms, hourly checks would use approximately **480 requests per day** for this feature alone. Manual profile operations and the **Refresh Schedule** button remain available when automatic schedule checking is disabled.
 
+### OpenTherm domestic hot water setpoint
+
+Some Tado X installations with an OpenTherm-connected receiver (observed on the European TR04) expose a domestic hot water temperature setpoint without a separate DHW relay. When `programmer/domesticHotWater/state` returns both `setpoint` and `setpointConstraints`, the integration offers a **Hot Water Temperature** number entity with the API-provided limits. Setting it posts `{"setpoint": <temperature>}` to `programmer/domesticHotWater/manualControl` and refreshes the state.
+
+When `roomsAndDevices.otherDevices` reports an `OPENTHERM` interface **and** the API exposes a DHW setpoint, relay-style **Boost Hot Water**, **Turn Off Hot Water**, **Resume Hot Water Schedule** and **Hot Water Mode** controls are disabled **by default for newly registered entities**. Existing entities and user choices are preserved. These actions may fail with `No RELAY DHW device in home` on installations without a DHW relay.
+
+This is a conservative default, **not** a definitive hardware capability test: `thermInterfaceType: OPENTHERM` alone does not prove that relay actions are unavailable in every installation. Other OpenTherm mode APIs may exist, but have not been verified. The number setpoint is independent of these relay-style controls.
+
 ## Devices and entities
 
 Available entities vary with hardware, account capabilities and configuration.

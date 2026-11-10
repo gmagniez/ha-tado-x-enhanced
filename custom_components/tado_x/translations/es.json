@@ -621,6 +621,9 @@
       }
     },
     "number": {
+      "dhw_setpoint": {
+        "name": "Temperatura del agua caliente"
+      },
       "max_flow_temperature": {
         "name": "Temperatura máxima de impulsión"
       },

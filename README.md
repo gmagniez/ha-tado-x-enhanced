@@ -96,6 +96,12 @@ When `roomsAndDevices.otherDevices` reports an `OPENTHERM` interface **and** the
 
 This is a conservative default, **not** a definitive hardware capability test: `thermInterfaceType: OPENTHERM` alone does not prove that relay actions are unavailable in every installation. Other OpenTherm mode APIs may exist, but have not been verified. The number setpoint is independent of these relay-style controls.
 
+### Hydronic balancing status
+
+Where supported by Tado, a read-only **Hydronic Balancing** binary sensor is available on the home device. It reads `GET /homes/{home_id}/settings/hydronicBalancing` and reflects the `hydronicBalancingEnabled` field (On/Off). The optional `isPanasonicThermInterfaceType` field is exposed as a diagnostic attribute.
+
+A successful response is cached for 24 hours, resulting in approximately **one additional API call per day per configured home** (included in the theoretical API usage estimate). The feature is not shown if no valid state is returned at startup. Transient errors preserve the last known state. No enable/disable switch is provided: turning off Tado hydronic balancing can reset its learned settings.
+
 ## Devices and entities
 
 Available entities vary with hardware, account capabilities and configuration.

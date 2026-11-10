@@ -152,6 +152,14 @@ class TadoXButton(CoordinatorEntity[TadoXDataUpdateCoordinator], ButtonEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.home_id}_{description.key}"
+        # Do not enable unverified relay DHW commands on setpoint-capable
+        # OpenTherm installations by default. Users can explicitly enable them.
+        if (
+            description.key in {"boost_hot_water", "disable_hot_water", "resume_hot_water_schedule"}
+            and coordinator.data
+            and coordinator.data.dhw_relay_actions_unverified
+        ):
+            self._attr_entity_registry_enabled_default = False
 
     @property
     def device_info(self) -> DeviceInfo:

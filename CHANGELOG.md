@@ -8,6 +8,22 @@ The project is independently maintained and is derived from the original Tado X 
 
 **[Readme](README.md)** · [Report an issue](https://github.com/rleatherb/ha-tado-x-enhanced/issues) · [Releases](https://github.com/rleatherb/ha-tado-x-enhanced/releases)
 
+## [Unreleased]
+
+### Added
+
+- Domestic hot water temperature setpoint control for compatible Tado X OpenTherm installations, using the Hops manual-control API and API-reported temperature limits.
+- Recognition of `MANUAL_ON` and `MANUAL_OFF` hot water states.
+
+### Changed
+
+- Relay-oriented hot water buttons and mode selector are disabled by default for newly registered entities on OpenTherm homes exposing a DHW setpoint, while preserving existing entity registrations and user preferences.
+
+### Validation and limitations
+
+- Confirmed reading a 50 °C setpoint and writing 51 °C against a live OpenTherm-connected Tado X installation, with the updated value visible in the Tado app.
+- Relay-control capability detection uses a conservative default; other OpenTherm installations may expose additional DHW controls. Multi-home behavior and automated regression execution remain to be verified.
+
 ## [1.2.0] - 2026-11-09
 
 ### Added

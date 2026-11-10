@@ -271,6 +271,10 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
         last = self._supplementary_last_success.get("hydronic_balancing")
         return last is None or monotonic() - last >= 86400
 
+    def invalidate_hydronic_balancing(self) -> None:
+        """Refresh balancing status after a user-initiated change."""
+        self.invalidate_supplementary("hydronic_balancing")
+
     def update_supplementary_settings(self, multiplier: int) -> None:
         """Apply a new multiplier, resetting due timestamps when it changes."""
         if self.supplementary_poll_multiplier != multiplier:
@@ -638,8 +642,7 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
                     data.flow_temp_auto_value = auto_adapt.get("maxFlowTemperature")
 
             # Hydronic balancing is a slowly changing home-level setting.
-            # Cache a successful response for 24 hours; do not probe by PATCH,
-            # since disabling can reset Tado's learned balancing behaviour.
+            # Cache a successful response for 24 hours. Writes explicitly\n            # invalidate this cache for an immediate subsequent GET.
             balancing = self._supplementary_cache.get("hydronic_balancing")
             if self.should_refresh_hydronic_balancing():
                 # Record attempts even on 404/unsupported homes. Repeated

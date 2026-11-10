@@ -60,6 +60,7 @@ class TadoXAdaptiveHeatingSwitch(
     _attr_has_entity_name = True
     _attr_translation_key = "adaptive_heating"
     _attr_icon = "mdi:radiator"
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: TadoXDataUpdateCoordinator) -> None:
         super().__init__(coordinator)

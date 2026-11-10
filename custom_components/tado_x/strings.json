@@ -621,6 +621,9 @@
       }
     },
     "number": {
+      "dhw_setpoint": {
+        "name": "Hot Water Temperature"
+      },
       "max_flow_temperature": {
         "name": "Max Flow Temperature"
       },

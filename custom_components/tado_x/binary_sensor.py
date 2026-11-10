@@ -83,6 +83,11 @@ async def async_setup_entry(
 
     entities: list[BinarySensorEntity] = []
 
+    # Expose this home-level status only if the endpoint returned a valid
+    # boolean on initial setup. Unsupported installations remain unchanged.
+    if coordinator.data.hydronic_balancing_enabled is not None:
+        entities.append(TadoXHydronicBalancingBinarySensor(coordinator))
+
     # Add room binary sensors
     for room_id in coordinator.data.rooms:
         for description in ROOM_BINARY_SENSORS:
@@ -97,6 +102,53 @@ async def async_setup_entry(
             entities.append(TadoXDeviceBinarySensor(coordinator, device.serial_number, description))
 
     async_add_entities(entities)
+
+
+class TadoXHydronicBalancingBinarySensor(
+    CoordinatorEntity[TadoXDataUpdateCoordinator], BinarySensorEntity
+):
+    """Read-only home hydronic balancing status."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "hydronic_balancing"
+    _attr_icon = "mdi:pipe"
+
+    def __init__(self, coordinator: TadoXDataUpdateCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.home_id}_hydronic_balancing"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self.coordinator.home_id))},
+            name=self.coordinator.home_name,
+            manufacturer="Tado",
+            model="Tado X Home",
+        )
+
+    @property
+    def available(self) -> bool:
+        return (
+            super().available
+            and self.coordinator.data is not None
+            and self.coordinator.data.hydronic_balancing_enabled is not None
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        data = self.coordinator.data
+        return data.hydronic_balancing_enabled if data else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, bool] | None:
+        data = self.coordinator.data
+        if data and data.hydronic_balancing_panasonic_interface is not None:
+            return {"panasonic_therm_interface": data.hydronic_balancing_panasonic_interface}
+        return None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self.async_write_ha_state()
 
 
 class TadoXRoomBinarySensor(CoordinatorEntity[TadoXDataUpdateCoordinator], BinarySensorEntity):

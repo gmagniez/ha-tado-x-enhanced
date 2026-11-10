@@ -36,7 +36,85 @@ async def async_setup_entry(
     if coordinator.data and coordinator.data.has_flow_temp_control:
         entities.append(TadoXMaxFlowTemperature(coordinator))
 
+    # Some OpenTherm systems allow changing the DHW setpoint even though
+    # relay-based boost/off actions are not supported.
+    if (
+        coordinator.enable_hot_water
+        and coordinator.data
+        and coordinator.data.dhw_setpoint is not None
+        and coordinator.data.dhw_setpoint_min is not None
+        and coordinator.data.dhw_setpoint_max is not None
+    ):
+        entities.append(TadoXDhwSetpoint(coordinator))
+
     async_add_entities(entities)
+
+
+class TadoXDhwSetpoint(CoordinatorEntity[TadoXDataUpdateCoordinator], NumberEntity):
+    """DHW temperature setpoint exposed by Tado Hops (e.g. OpenTherm)."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "dhw_setpoint"
+    _attr_icon = "mdi:water-thermometer"
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_step = 1.0
+
+    def __init__(self, coordinator: TadoXDataUpdateCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.home_id}_dhw_setpoint"
+        self._update_constraints()
+
+    def _update_constraints(self) -> None:
+        data = self.coordinator.data
+        if data and data.dhw_setpoint_min is not None and data.dhw_setpoint_max is not None:
+            self._attr_native_min_value = float(data.dhw_setpoint_min)
+            self._attr_native_max_value = float(data.dhw_setpoint_max)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self.coordinator.home_id))},
+            name=self.coordinator.home_name,
+            manufacturer="Tado",
+            model="Tado X Home",
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        data = self.coordinator.data
+        return float(data.dhw_setpoint) if data and data.dhw_setpoint is not None else None
+
+    @property
+    def available(self) -> bool:
+        data = self.coordinator.data
+        return bool(
+            self.coordinator.enable_hot_water
+            and data is not None
+            and data.dhw_setpoint is not None
+            and data.dhw_setpoint_min is not None
+            and data.dhw_setpoint_max is not None
+        )
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Only send setpoints within the API-advertised temperature range."""
+        data = self.coordinator.data
+        if (
+            not data
+            or data.dhw_setpoint_min is None
+            or data.dhw_setpoint_max is None
+            or not data.dhw_setpoint_min <= value <= data.dhw_setpoint_max
+        ):
+            raise ValueError("Domestic hot water temperature outside supported range")
+        if not float(value).is_integer():
+            raise ValueError("Domestic hot water temperature must be a whole degree")
+        await self.coordinator.api.set_domestic_hot_water_temperature(int(value))
+        await self.coordinator.async_request_refresh()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._update_constraints()
+        self.async_write_ha_state()
 
 
 class TadoXMaxFlowTemperature(CoordinatorEntity[TadoXDataUpdateCoordinator], NumberEntity):

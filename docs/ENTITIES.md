@@ -199,3 +199,7 @@ If the same home reports `thermInterfaceType: OPENTHERM`, the relay-oriented DHW
 
 This is a heuristic, not a universal declaration that OpenTherm installations cannot support DHW mode changes. A returned `No RELAY DHW device in home` error indicates the specific relay command is not supported by the installation. The account's `features` list (e.g. adaptiveHeating, hydronicBalancing) does not advertise relay capability.
 
+
+### Hydronic balancing (read-only)
+
+**Hydronic Balancing** is a home-level binary sensor created when the Hops `settings/hydronicBalancing` endpoint returns a boolean `hydronicBalancingEnabled`. It displays On/Off, and optionally exposes `panasonic_therm_interface` as an attribute. It is read-only to avoid accidentally resetting Tado's learned hydraulic-balancing parameters when the feature is disabled. The last successful state is cached and rechecked once every 24 hours; unsupported endpoints do not create an entity. The cost is about one API request per home per day, accounted for in the theoretical quota projection.

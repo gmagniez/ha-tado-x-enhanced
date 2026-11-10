@@ -621,6 +621,9 @@
       },
       "hydronic_balancing": {
         "name": "Hydraulischer Abgleich"
+      },
+      "adaptive_heating": {
+        "name": "Adaptives Heizen"
       }
     },
     "number": {

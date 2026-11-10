@@ -68,4 +68,18 @@ for invalid in (29, 66, 50.5):
     except ValueError:
         pass
 assert saved == [51, "refreshed"]
+
+# Capability detection must be based on both the observed interface and a
+# setpoint-capable DHW response; OpenTherm alone is not a relay capability flag.
+coordinator_source = (root / "coordinator.py").read_text()
+assert 'device.get("thermInterfaceType") == "OPENTHERM"' in coordinator_source
+assert "data.dhw_setpoint is not None" in coordinator_source
+for platform in ("button.py", "select.py"):
+    source = (root / platform).read_text()
+    assert "data.dhw_relay_actions_unverified" in source
+    assert "_attr_entity_registry_enabled_default = False" in source
+    # Guard the registry reconciliation so it does not re-enable the
+    # default-disabled entities on startup.
+    assert "if any(entity_entry.unique_id.endswith" in source
+
 print("OpenTherm DHW setpoint regression checks passed")

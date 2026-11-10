@@ -621,6 +621,9 @@
       },
       "hydronic_balancing": {
         "name": "Bilanciamento idraulico"
+      },
+      "adaptive_heating": {
+        "name": "Riscaldamento adattivo"
       }
     },
     "number": {

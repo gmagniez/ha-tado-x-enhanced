@@ -96,6 +96,12 @@ When `roomsAndDevices.otherDevices` reports an `OPENTHERM` interface **and** the
 
 This is a conservative default, **not** a definitive hardware capability test: `thermInterfaceType: OPENTHERM` alone does not prove that relay actions are unavailable in every installation. Other OpenTherm mode APIs may exist, but have not been verified. The number setpoint is independent of these relay-style controls.
 
+### Adaptive Heating control (experimental)
+
+Where the Hops API returns `adaptiveHeatingEnabled` as a boolean, the home exposes an **Adaptive Heating** switch. Its state is read via `GET /homes/{home_id}/settings/adaptiveHeating`, with 24-hour caching and immediate refresh after changes. An additional daily request per home is included in the API quota projection.
+
+The `PATCH` request uses `{"adaptiveHeatingEnabled": true/false}`. **Only the GET response has been observed; the PATCH payload is inferred from the existing hydronic-balancing API and must be validated on a live installation.** Avoid relying on this control until verified.
+
 ### Hydronic balancing status
 
 Where supported by Tado, a **Hydronic Balancing** switch (disabled by default) is available on the home device. It reads `GET /homes/{home_id}/settings/hydronicBalancing` and reflects the `hydronicBalancingEnabled` field (On/Off). The optional `isPanasonicThermInterfaceType` field is exposed as a diagnostic attribute.

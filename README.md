@@ -100,7 +100,7 @@ This is a conservative default, **not** a definitive hardware capability test: `
 
 Where the Hops API returns `adaptiveHeatingEnabled` as a boolean, the home exposes an **Adaptive Heating** switch. Its state is read via `GET /homes/{home_id}/settings/adaptiveHeating`, with 24-hour caching and immediate refresh after changes. An additional daily request per home is included in the API quota projection.
 
-The `PATCH` request uses `{"adaptiveHeatingEnabled": true/false}`. **Only the GET response has been observed; the PATCH payload is inferred from the existing hydronic-balancing API and must be validated on a live installation.** Avoid relying on this control until verified.
+The `PATCH` request uses `{"adaptiveHeatingEnabled": true/false}`. **The GET and PATCH request formats have been observed in the official Tado web application (PATCH returned HTTP 200 for disabling).** Disabling Adaptive Heating resets its learned room-heating behavior; after re-enabling, learning starts again from scratch. Consider adding dashboard confirmation for the off action. Dashboard confirmation does not protect direct service calls or automations. End-to-end switch operation from Home Assistant remains to be verified.
 
 ### Hydronic balancing status
 

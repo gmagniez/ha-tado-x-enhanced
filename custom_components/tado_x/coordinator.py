@@ -145,6 +145,7 @@ class TadoXData:
     flow_temp_auto_adaptation: bool = False
     flow_temp_auto_value: int | None = None
     has_flow_temp_control: bool = False
+    adaptive_heating_enabled: bool | None = None
     hydronic_balancing_enabled: bool | None = None
     hydronic_balancing_panasonic_interface: bool | None = None
     # Domestic hot water state (e.g., OFF, SCHEDULE_ON, SCHEDULE_OFF, BOOST)
@@ -263,6 +264,17 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
         from time import monotonic
         self._supplementary_cache[feature] = value
         self._supplementary_last_success[feature] = monotonic()
+
+    def should_refresh_adaptive_heating(self) -> bool:
+        """Check adaptive heating no more than once every 24 hours."""
+        from time import monotonic
+
+        last = self._supplementary_last_success.get("adaptive_heating")
+        return last is None or monotonic() - last >= 86400
+
+    def invalidate_adaptive_heating(self) -> None:
+        """Re-fetch status immediately after an explicit write."""
+        self.invalidate_supplementary("adaptive_heating")
 
     def should_refresh_hydronic_balancing(self) -> bool:
         """Fetch this slow-changing setting at most once every 24 hours."""
@@ -640,6 +652,25 @@ class TadoXDataUpdateCoordinator(DataUpdateCoordinator[TadoXData]):
                     auto_adapt = flow_data.get("autoAdaptation") or {}
                     data.flow_temp_auto_adaptation = auto_adapt.get("enabled", False)
                     data.flow_temp_auto_value = auto_adapt.get("maxFlowTemperature")
+
+            # Adaptive Heating is a slowly changing home-level setting.
+            # Failed attempts are also throttled to protect the API quota.
+            adaptive = self._supplementary_cache.get("adaptive_heating")
+            if self.should_refresh_adaptive_heating():
+                from time import monotonic
+
+                self._supplementary_last_success["adaptive_heating"] = monotonic()
+                try:
+                    response = await self.api.get_adaptive_heating()
+                    if isinstance(response.get("adaptiveHeatingEnabled"), bool):
+                        adaptive = response
+                        self.mark_supplementary_success("adaptive_heating", response)
+                except Exception as err:
+                    _LOGGER.debug("Adaptive Heating unavailable for home %s: %s", self.home_id, err)
+            if isinstance(adaptive, dict):
+                enabled = adaptive.get("adaptiveHeatingEnabled")
+                if isinstance(enabled, bool):
+                    data.adaptive_heating_enabled = enabled
 
             # Hydronic balancing is a slowly changing home-level setting.
             # Cache a successful response for 24 hours. Writes explicitly\n            # invalidate this cache for an immediate subsequent GET.

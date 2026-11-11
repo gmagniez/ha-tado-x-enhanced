@@ -1141,6 +1141,28 @@ class TadoXApi:
         )
         return result if isinstance(result, dict) else {}
 
+    async def get_adaptive_heating(self) -> dict[str, Any]:
+        """Read the home-level Adaptive Heating setting."""
+        if not self._home_id:
+            raise TadoXApiError("Home ID not set")
+
+        result = await self._request(
+            "GET",
+            f"{TADO_HOPS_API_URL}/homes/{self._home_id}/settings/adaptiveHeating",
+        )
+        return result if isinstance(result, dict) else {}
+
+    async def set_adaptive_heating(self, enabled: bool) -> None:
+        """Set Adaptive Heating using the observed Tado web API PATCH."""
+        if not self._home_id:
+            raise TadoXApiError("Home ID not set")
+
+        await self._request(
+            "PATCH",
+            f"{TADO_HOPS_API_URL}/homes/{self._home_id}/settings/adaptiveHeating",
+            json_data={"adaptiveHeatingEnabled": enabled},
+        )
+
     async def get_hydronic_balancing(self) -> dict[str, Any]:
         """Read hydronic balancing configuration."""
         if not self._home_id:

@@ -621,6 +621,9 @@
       },
       "hydronic_balancing": {
         "name": "Hydronic Balancing"
+      },
+      "adaptive_heating": {
+        "name": "Adaptive Heating"
       }
     },
     "number": {

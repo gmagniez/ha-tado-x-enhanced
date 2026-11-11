@@ -41,7 +41,7 @@ def project_daily_api_usage(
     supplementary_count = sum((weather, air_comfort, running_times, flow_temp, holiday_mode))
     supplementary = SECONDS_PER_DAY / (main_interval * multiplier) * supplementary_count
     # Read-only hydronic balancing settings are refreshed once per 24 hours.
-    supplementary += 1.0
+    supplementary += 2.0  # Daily hydronic balancing and Adaptive Heating reads
     schedule = (SECONDS_PER_DAY / schedule_interval * 2 * room_count
                 if schedule_enabled else 0.0)
     total = main + supplementary + schedule
